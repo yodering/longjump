@@ -1,0 +1,216 @@
+{
+  "steamApp": 740,
+  "steamDepot": 731,
+  "depotManifest": "1224088799001669801",
+  "manifestDate": "2023-10-12",
+  "description": "Final CS:GO (legacy) shared content, downloaded anonymously with SteamRE/DepotDownloader 3.4.0.",
+  "sourceFiles": [
+    {
+      "path": "models/weapons/v_ct_knife_anim.ani",
+      "bytes": 122728,
+      "sha256": "55f060be2383857f57a220e1a8308eb82bf1dc27f7d97346780282ab49c1afcc"
+    },
+    {
+      "path": "models/weapons/v_ct_knife_anim.mdl",
+      "bytes": 31600,
+      "sha256": "7e46d8a5ee4dd4bc93787a3d979d487c948d410ae3633b7e5479bc8a3803c3df"
+    },
+    {
+      "path": "models/weapons/v_knife_default_ct.ani",
+      "bytes": 408,
+      "sha256": "8b3ea16f5cb320abd34434cc6c5473c5aa92f0523a3158f9d15c419ace61d0e2"
+    },
+    {
+      "path": "models/weapons/v_knife_default_ct.dx90.vtx",
+      "bytes": 75547,
+      "sha256": "5d782949fc70d6fc6db5914eb16e22ab0e9ae422bcb78fcc3794d5b25feed077"
+    },
+    {
+      "path": "models/weapons/v_knife_default_ct.mdl",
+      "bytes": 16156,
+      "sha256": "7514966667d629e9f4b408115f86ad54c38f089ca7087c0ad7664b93c6c36427"
+    },
+    {
+      "path": "models/weapons/v_knife_default_ct.vvd",
+      "bytes": 303296,
+      "sha256": "4b374ec6f653bd4d296381dd369cbcb898380756b25a37c781fbe7ad19b8d72e"
+    },
+    {
+      "path": "models/weapons/v_knife_default_t.ani",
+      "bytes": 408,
+      "sha256": "8b3ea16f5cb320abd34434cc6c5473c5aa92f0523a3158f9d15c419ace61d0e2"
+    },
+    {
+      "path": "models/weapons/v_knife_default_t.dx90.vtx",
+      "bytes": 28315,
+      "sha256": "f710234e48c736901a4bbf22de63f2f9d4121d4c9597fbd7045652676738f321"
+    },
+    {
+      "path": "models/weapons/v_knife_default_t.mdl",
+      "bytes": 16052,
+      "sha256": "e7be22e2f24f0eefc20fb3db885b814f452e154ceb81bc7e478a335a0020b016"
+    },
+    {
+      "path": "models/weapons/v_knife_default_t.vvd",
+      "bytes": 113856,
+      "sha256": "b59ec134755423744fa7ff5b9613d35a7003915478859ae3ccecac0577e97305"
+    },
+    {
+      "path": "models/weapons/v_models/arms/glove_fullfinger/v_glove_fullfinger.ani",
+      "bytes": 416,
+      "sha256": "3f0d82f7baa083b1390ba4e20a824931010330ebb39c4201be0f05046d7fb7cf"
+    },
+    {
+      "path": "models/weapons/v_models/arms/glove_fullfinger/v_glove_fullfinger.dx90.vtx",
+      "bytes": 105134,
+      "sha256": "e36e28ee5e5bbde5f1e93216f33c5c33ec3745e23b6979121062fb43fc8015ae"
+    },
+    {
+      "path": "models/weapons/v_models/arms/glove_fullfinger/v_glove_fullfinger.mdl",
+      "bytes": 22868,
+      "sha256": "6cff760db9a3b05906f8458f91d3d79f1db5039dd4d75dbf18812f9a29f45b73"
+    },
+    {
+      "path": "models/weapons/v_models/arms/glove_fullfinger/v_glove_fullfinger.vvd",
+      "bytes": 354112,
+      "sha256": "e2e62283c76a82117779a3eedca98e7126fdc41518d3478532b37357ffd52187"
+    },
+    {
+      "path": "models/weapons/v_models/arms/glove_hardknuckle/v_glove_hardknuckle.ani",
+      "bytes": 416,
+      "sha256": "3f0d82f7baa083b1390ba4e20a824931010330ebb39c4201be0f05046d7fb7cf"
+    },
+    {
+      "path": "models/weapons/v_models/arms/glove_hardknuckle/v_glove_hardknuckle.dx90.vtx",
+      "bytes": 141818,
+      "sha256": "3aba1ff9d8e57c1f4d145cc4eb458cacd6d366de1414dc1e76cf7bd40c8109c2"
+    },
+    {
+      "path": "models/weapons/v_models/arms/glove_hardknuckle/v_glove_hardknuckle.mdl",
+      "bytes": 23152,
+      "sha256": "4807f42204b6da79688c258a088510548a024cd9362100ae5646e62d34733f99"
+    },
+    {
+      "path": "models/weapons/v_models/arms/glove_hardknuckle/v_glove_hardknuckle.vvd",
+      "bytes": 471104,
+      "sha256": "3334b3949ec02067b757f8474304aaa62ebd75dd49108bfa33c367381bfe5163"
+    },
+    {
+      "path": "models/weapons/v_models/arms/st6/v_sleeve_st6.dx90.vtx",
+      "bytes": 90937,
+      "sha256": "17a4135a4d35875b2b490d9ac65057ec3af0a57d8a093544eb05ebf568452a8f"
+    },
+    {
+      "path": "models/weapons/v_models/arms/st6/v_sleeve_st6.mdl",
+      "bytes": 8740,
+      "sha256": "e82029380b497d7ae33711f1f7c2afb59418f5c1fe1a6badb14dbfe3cb581bc0"
+    },
+    {
+      "path": "models/weapons/v_models/arms/st6/v_sleeve_st6.vvd",
+      "bytes": 285248,
+      "sha256": "df3053540ad966a3b12f294ec1869c1ac7d7fecb36160c034298657e71689021"
+    },
+    {
+      "path": "models/weapons/v_t_knife_anim.ani",
+      "bytes": 122728,
+      "sha256": "55f060be2383857f57a220e1a8308eb82bf1dc27f7d97346780282ab49c1afcc"
+    },
+    {
+      "path": "models/weapons/v_t_knife_anim.mdl",
+      "bytes": 31696,
+      "sha256": "a5b6c1da10950bb60375153c2ba77878ab5f17ce2d5cc7a92189f4a2f5490075"
+    },
+    {
+      "path": "materials/models/weapons/v_models/arms/bare/bare_arm_133.vmt",
+      "bytes": 752,
+      "sha256": "5ed93c69d6c510a1a9b993af6d8bfe5a7aec1fb70cd2734d572b0a98fea18ca6"
+    },
+    {
+      "path": "materials/models/weapons/v_models/arms/bare/bare_arm_133.vtf",
+      "bytes": 2796408,
+      "sha256": "83dd98a92c224ba7afdb8e9d7e5c763eed74ca64daa40979bfe23c788b3ac900"
+    },
+    {
+      "path": "materials/models/weapons/v_models/arms/bare/bare_arm_133_normal.vtf",
+      "bytes": 2796408,
+      "sha256": "1af1e320437f787ba4d609f42f11a83a77980d6a7318bfd3ecc0538c36984a29"
+    },
+    {
+      "path": "materials/models/weapons/v_models/arms/glove_hardknuckle/glove_hardknuckle.vmt",
+      "bytes": 752,
+      "sha256": "2af49cb009c2c9af8042fb5354eebb527c7df67963a065f2e7059e5c7a059de8"
+    },
+    {
+      "path": "materials/models/weapons/v_models/arms/glove_hardknuckle/glove_hardknuckle.vtf",
+      "bytes": 699296,
+      "sha256": "61ad5d6c4adfc0b34a8ec975e79f626222625016294261d597087bb1aeb68eb9"
+    },
+    {
+      "path": "materials/models/weapons/v_models/arms/glove_hardknuckle/glove_hardknuckle_normal.vtf",
+      "bytes": 1398360,
+      "sha256": "06ac48275d07d938ed5c75801a031cafadb29a36fd06fe3de797e322a5293d0f"
+    },
+    {
+      "path": "materials/models/weapons/v_models/arms/glove_fullfinger/glove_fullfinger.vmt",
+      "bytes": 815,
+      "sha256": "cc72b77bfb3faff414b07763c35b84264f5b89fccdfc66b903e653081b6ce810"
+    },
+    {
+      "path": "materials/models/weapons/v_models/arms/glove_fullfinger/glove_fullfinger.vtf",
+      "bytes": 1398360,
+      "sha256": "cd36cd8b510173b92915aab1444fb8fba586af14652c9b82f2ef0ce12e207963"
+    },
+    {
+      "path": "materials/models/weapons/v_models/arms/glove_fullfinger/glove_fullfinger_normal.vtf",
+      "bytes": 1398360,
+      "sha256": "186500215e88370ddebed65733425ac7ce9fb805a457fb108d3840f00de45c07"
+    },
+    {
+      "path": "materials/models/weapons/v_models/arms/st6/sleeve_st6.vmt",
+      "bytes": 495,
+      "sha256": "4a9980e4cda8b2d4a0642daf81fc8723a0c5c9112d6cfc54b1eb1fef017eceea"
+    },
+    {
+      "path": "materials/models/weapons/v_models/arms/st6/sleeve_st6.vtf",
+      "bytes": 1398288,
+      "sha256": "e1c5a2ac5188f4aeeb8d94acc3385b462332452e7294aea19c8dbd4b818f97a8"
+    },
+    {
+      "path": "materials/models/weapons/v_models/arms/st6/sleeve_st6_normal.vtf",
+      "bytes": 2796408,
+      "sha256": "59861481d7b45e348945eb1d5ac62765143f212bce4d06fed45a0a347eac5202"
+    },
+    {
+      "path": "materials/models/weapons/v_models/knife_ct/knife_ct.vmt",
+      "bytes": 485,
+      "sha256": "b66b56dea402a0cb7836c38fa33c271fe0d4b9f2759d5a4075cc7f8ba497f756"
+    },
+    {
+      "path": "materials/models/weapons/v_models/knife_ct/knife_ct.vtf",
+      "bytes": 1398360,
+      "sha256": "cb9119e60aa1baf5c879efba15a4a16fcbc5f8606a4288c13e5f3db3fff06dfa"
+    },
+    {
+      "path": "materials/models/weapons/v_models/knife_t/knife_t.vmt",
+      "bytes": 453,
+      "sha256": "ca9fb8e3f01b2f549eee7589d90a4b1700b1f4d159b0be9e3832bd3ca30d2890"
+    },
+    {
+      "path": "materials/models/weapons/v_models/knife_t/knife_t.vtf",
+      "bytes": 1398360,
+      "sha256": "3c7eeb1a4d36e710e4279830f0d3bf958eacb249f7fa157def33776dd748ef11"
+    }
+  ],
+  "outputs": [
+    {
+      "path": "public/viewmodels/knife_ct.glb",
+      "bytes": 5277736,
+      "sha256": "ebc362af9d9c4130d977585638d0e9fb2a4b41bf08bfe0c3f90c0640df306468"
+    },
+    {
+      "path": "public/viewmodels/knife_t.glb",
+      "bytes": 3472128,
+      "sha256": "fba8310e86dcadd149f8a9da76a4bfbb5e3452b76929c4d93438d61767bf20c2"
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+knife_ct.glb / knife_t.glb: CS:GO default knife viewmodels and default arms by Valve,
+converted from Steam depot 731 (manifest 1224088799001669801) by scripts/import_viewmodels.py.
+Valve assets retain their original owners' rights. No new asset license is assigned.
+
+Source files, conversion steps and SHA-256 hashes: research/viewmodels/README.md and provenance.json.

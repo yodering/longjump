@@ -1,0 +1,51 @@
+{
+  "gokzCommit": "c56aa84f0581167bc5a2998e9f631382f67141be",
+  "sounds": [
+    {
+      "name": "impressive",
+      "url": "https://raw.githubusercontent.com/KZGlobalTeam/gokz/c56aa84f0581167bc5a2998e9f631382f67141be/sound/gokz/impressive.mp3",
+      "sha256": "5c822c6be1262d26a872db0897828a44719889b4367693d33255712f70dcf717",
+      "bytes": 25283
+    },
+    {
+      "name": "perfect",
+      "url": "https://raw.githubusercontent.com/KZGlobalTeam/gokz/c56aa84f0581167bc5a2998e9f631382f67141be/sound/gokz/perfect.mp3",
+      "sha256": "e91d693f798cb64006881d087dfc3761f0ba78b4848ad6ac4f83277afe1d6055",
+      "bytes": 19893
+    },
+    {
+      "name": "godlike",
+      "url": "https://raw.githubusercontent.com/KZGlobalTeam/gokz/c56aa84f0581167bc5a2998e9f631382f67141be/sound/gokz/godlike.mp3",
+      "sha256": "206b21d05207b8aec1516e0aafcf06e78ddaca479e5c8413e04875a2a241a14b",
+      "bytes": 16773
+    },
+    {
+      "name": "ownage",
+      "url": "https://raw.githubusercontent.com/KZGlobalTeam/gokz/c56aa84f0581167bc5a2998e9f631382f67141be/sound/gokz/ownage.mp3",
+      "sha256": "ed9702c003d76cc7befa268a4b4759525d2c33eec35bec41b5648098e0e98dc3",
+      "bytes": 24421
+    },
+    {
+      "name": "wrecker",
+      "url": "https://raw.githubusercontent.com/KZGlobalTeam/gokz/c56aa84f0581167bc5a2998e9f631382f67141be/sound/gokz/wrecker.mp3",
+      "sha256": "2036f26a0983639b9ef623574ddc28c75580de7a30f2c7c1fa6bb31d4017e06c",
+      "bytes": 31858
+    }
+  ],
+  "sourceArchiveCommit": "08f1bd6835d4f510d2ccaedeab6bb9f637b388ab",
+  "sourceArchive": "https://github.com/sourcesounds/csgo",
+  "beeps": [
+    {
+      "name": "blip1",
+      "url": "https://raw.githubusercontent.com/sourcesounds/csgo/08f1bd6835d4f510d2ccaedeab6bb9f637b388ab/sound/buttons/blip1.wav",
+      "sha256": "d806ef98af753a78c8eacb00910d662afa914dd02170b84a3f973be12e65ff4a",
+      "bytes": 4976
+    },
+    {
+      "name": "button10",
+      "url": "https://raw.githubusercontent.com/sourcesounds/csgo/08f1bd6835d4f510d2ccaedeab6bb9f637b388ab/sound/buttons/button10.wav",
+      "sha256": "e26a8925c642ffbcff93178e31a4f1144cbdc27de348518e75257a045e845d6a",
+      "bytes": 8478
+    }
+  ]
+}

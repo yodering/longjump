@@ -1,0 +1,11 @@
+Announcer files: unmodified GOKZ sound/gokz MP3s from KZGlobalTeam/gokz,
+revision c56aa84f0581167bc5a2998e9f631382f67141be.
+Source repository: https://github.com/KZGlobalTeam/gokz
+GOKZ publishes its repository under GPL-3.0; its license is included in this directory.
+
+Checkpoint/error WAVs: original Valve CS:GO recordings mirrored by sourcesounds/csgo,
+revision 08f1bd6835d4f510d2ccaedeab6bb9f637b388ab.
+Asset source: https://github.com/sourcesounds/csgo
+Valve recordings retain their original owners' rights. No new asset license is assigned.
+
+Exact source URLs and SHA-256 hashes: research/audio/provenance.json.
