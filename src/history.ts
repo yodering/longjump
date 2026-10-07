@@ -1,7 +1,7 @@
 import type { Result } from './physics.ts';
 import type { MapId } from './maps.ts';
 
-export type Entry = Result & { mapId?: MapId; tickRate: number; gap: number; at: number };
+export type Entry = Result & { mapId?: MapId; tickRate: number; gap: number; at: number; ljBind?: boolean };
 
 // Storage can contain older or incomplete records. Validate everything the history UI reads.
 export function readHistory(value: unknown): Entry[] {

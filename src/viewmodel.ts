@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { lighting, sourcePhongMaterial, type SourcePhong } from './source-phong.ts';
 import type { LightState } from './map-lighting';
+import { viewPresets, type ViewSettings } from './settings.ts';
 
 // CS:GO's default knife viewmodels (converted by scripts/import_viewmodels.py), drawn in their own scene
 // over the world like a Source viewmodel. View space: x = right, y = up, -z = forward, in Source units.
@@ -9,9 +10,8 @@ export type Team = 'ct' | 't';
 export type ViewAction = 'draw' | 'inspect' | 'light' | 'heavy';
 export type ViewState = { speed: number; grounded: boolean; yaw: number; pitch: number; dt: number; leftHand: boolean };
 // CS:GO defaults: viewmodel_presetpos 1 ("Desktop") sets viewmodel_fov 60 and offsets x 1, y 1, z -1.
-const VIEWMODEL_FOV = 60, OFFSET_X = 1, OFFSET_Y = 1, OFFSET_Z = -1;
 // cl_bob* defaults from weapon_csbase.cpp; a 250-speed knife gives a 0.21 s bob cycle.
-const BOB_CYCLE = (1000 - 250) / 3.5 * 0.001 * 0.98, BOB_UP = 0.5, BOB_VERT = 0.25, BOB_LAT = 0.4, BOB_LOWER = 21;
+const BOB_UP = 0.5;
 type V3 = [number, number, number];
 const DEG = Math.PI / 180;
 // Source AngleVectors (pitch, yaw, roll in degrees; x forward, y left, z up).
@@ -51,6 +51,7 @@ function fallback() {
 }
 
 export class Viewmodel {
+  settings: ViewSettings = { ...viewPresets.desktop };
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 200);
   root = new THREE.Group();
@@ -113,9 +114,10 @@ export class Viewmodel {
   }
   resize(aspect: number) {
     this.camera.aspect = aspect;
-    this.camera.fov = 2 * Math.atan(Math.tan(VIEWMODEL_FOV * Math.PI / 360) * 0.75) * 180 / Math.PI;
+    this.camera.fov = 2 * Math.atan(Math.tan(this.settings.fov * Math.PI / 360) * 0.75) * 180 / Math.PI;
     this.camera.updateProjectionMatrix();
   }
+  configure(settings: ViewSettings) { this.settings = { ...settings }; this.resize(this.camera.aspect); }
   // CBaseViewModel::CalcViewModelView with CS:GO's CalcViewModelBobHelper / AddViewModelBobHelper and CalcViewModelLag.
   // yaw/pitch are the game's (radians, positive yaw turns right, positive pitch looks up); speed is horizontal.
   update({ speed, grounded, yaw, pitch, dt, leftHand }: ViewState) {
@@ -125,19 +127,20 @@ export class Viewmodel {
     const view = angleVectors(eye.pitch, eye.yaw, 0);
     // Offsets along the original eye vectors.
     let origin: V3 = [0, 0, 0];
-    origin = ma(origin, OFFSET_Y, view.forward); origin = ma(origin, OFFSET_Z, view.up); origin = ma(origin, OFFSET_X, view.right);
+    origin = ma(origin, this.settings.y, view.forward); origin = ma(origin, this.settings.z, view.up); origin = ma(origin, this.settings.x, view.right);
     // CalcViewModelBobHelper: speed changes are rate-limited, then drive a 0.21 s cycle.
     const limit = dt * 640;
     const s = Math.max(-320, Math.min(320, Math.max(this.lastSpeed - limit, Math.min(this.lastSpeed + limit, speed))));
     this.lastSpeed = s;
-    const runLower = BOB_LOWER * 0.2 * (s * 0.006);
+    const cycle = (1000 - 250) / 3.5 * 0.001 * this.settings.bobCycle;
+    const runLower = this.settings.bobLower * 0.2 * (s * 0.006);
     this.bobTime += dt * (s / 320);
     const multiplier = grounded ? 0.00625 : 0.00125;
-    let vertical = s * multiplier * BOB_VERT;
-    vertical = vertical * 0.3 + vertical * 0.7 * Math.sin(bobCycle(this.bobTime, BOB_CYCLE));
+    let vertical = s * multiplier * this.settings.bobVert;
+    vertical = vertical * 0.3 + vertical * 0.7 * Math.sin(bobCycle(this.bobTime, cycle));
     vertical = Math.max(-7, Math.min(4, vertical - runLower));
-    let lateral = s * multiplier * BOB_LAT;
-    lateral = Math.max(-8, Math.min(8, lateral * 0.3 + lateral * 0.7 * Math.sin(bobCycle(this.bobTime, BOB_CYCLE * 2))));
+    let lateral = s * multiplier * this.settings.bobLat;
+    lateral = Math.max(-8, Math.min(8, lateral * 0.3 + lateral * 0.7 * Math.sin(bobCycle(this.bobTime, cycle * 2))));
     // AddViewModelBobHelper
     const angles = { pitch: eye.pitch - vertical * 0.4, yaw: eye.yaw - lateral * 0.3, roll: vertical * 0.5 };
     origin = ma(origin, vertical * 0.4, view.forward); origin[2] += vertical * 0.1; origin = ma(origin, lateral * 0.2, view.right);

@@ -4,6 +4,8 @@ import type { ImportedMap, MapId } from './maps';
 import { Viewmodel } from './viewmodel';
 import { lightmappedMaterial } from './lightmapped';
 import { MapLighting } from './map-lighting';
+import { displayLayout } from './display.ts';
+import type { Settings } from './settings.ts';
 
 function texture(kind: 'concrete' | 'grid') {
   const canvas = document.createElement('canvas'); canvas.width = canvas.height = 256;
@@ -61,9 +63,10 @@ export class World {
   // Compiled lighting of the current imported map: lightmap atlas for surfaces, light state for the viewmodel.
   lighting: MapLighting | null = null; private lightmap: THREE.Texture | null = null;
   sky = new THREE.Group();
+  private display: Pick<Settings, 'resolution' | 'scaling'> = { resolution: 'native', scaling: 'stretch' };
   constructor(container: HTMLElement, gap: number) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); this.renderer.setSize(innerWidth, innerHeight);
+    this.renderer.setPixelRatio(1);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping; this.renderer.toneMappingExposure = 1.12;
     this.renderer.shadowMap.enabled = true; this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -96,8 +99,19 @@ export class World {
     this.room.add(this.label('VNL', new THREE.Vector3(-872, 145, -160), 220, 100, '#cdd6cb', '#536a5e', Math.PI / 2));
     this.room.add(this.label('01 — 05', new THREE.Vector3(870, 140, -160), 260, 80, '#cdd6cb', '#536a5e', -Math.PI / 2));
     this.buildPlatforms(gap);
-    this.viewmodel.resize(innerWidth / innerHeight);
-    addEventListener('resize', () => { this.camera.aspect = innerWidth / innerHeight; this.camera.updateProjectionMatrix(); this.viewmodel.resize(innerWidth / innerHeight); this.renderer.setSize(innerWidth, innerHeight); });
+    this.resizeDisplay();
+    addEventListener('resize', () => this.resizeDisplay());
+  }
+  configureDisplay(settings: Pick<Settings, 'resolution' | 'scaling'>) {
+    if (this.display.resolution === settings.resolution && this.display.scaling === settings.scaling) return;
+    this.display = { resolution: settings.resolution, scaling: settings.scaling }; this.resizeDisplay();
+  }
+  private resizeDisplay() {
+    const layout = displayLayout(this.display.resolution, this.display.scaling, innerWidth, innerHeight, devicePixelRatio);
+    this.camera.aspect = layout.aspect; this.camera.updateProjectionMatrix(); this.viewmodel.resize(layout.aspect);
+    this.renderer.setSize(layout.bufferWidth, layout.bufferHeight, false);
+    Object.assign(this.renderer.domElement.style, { position: 'absolute', width: `${layout.cssWidth}px`, height: `${layout.cssHeight}px`,
+      left: `${layout.left}px`, top: `${layout.top}px` });
   }
   box(group: THREE.Group, w: number, h: number, d: number, x: number, y: number, z: number, material: THREE.Material | THREE.Material[]) {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material); mesh.position.set(x, y, z); mesh.castShadow = true; mesh.receiveShadow = true; group.add(mesh); return mesh;
@@ -224,13 +238,13 @@ export class World {
     this.renderer.clear(); this.renderer.render(this.scene, this.camera);
   }
   // eye: the interpolated eye position from Movement.eye(); punch: CS:GO view punch in degrees (positive looks down).
-  play(eye: Vec, yaw: number, pitch: number, fov: number, dt: number,
+  play(eye: Vec, yaw: number, pitch: number, dt: number,
     view: { punch: number; speed: number; grounded: boolean; show: boolean; leftHand: boolean }) {
     this.camera.position.set(eye.x, eye.z, -eye.y);
     pitch -= view.punch * Math.PI / 180;
     this.camera.rotation.order = 'YXZ'; this.camera.rotation.set(pitch, -yaw, 0);
     // Source FOV is horizontal at 4:3; Three.js expects vertical FOV.
-    const verticalFov = 2 * Math.atan(Math.tan(fov * Math.PI / 360) * 0.75) * 180 / Math.PI;
+    const verticalFov = 2 * Math.atan(0.75) * 180 / Math.PI;
     if (this.camera.fov !== verticalFov) { this.camera.fov = verticalFov; this.camera.updateProjectionMatrix(); }
     this.sky.position.copy(this.camera.position);
     this.renderer.clear(); this.renderer.render(this.scene, this.camera);

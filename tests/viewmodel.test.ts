@@ -2,6 +2,22 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { Viewmodel } from '../src/viewmodel.ts';
+import { viewPresets } from '../src/settings.ts';
+
+test('Viewmodel preferences update its projection and offsets independently of the world camera', () => {
+  const viewmodel = Object.create(Viewmodel.prototype) as Viewmodel;
+  const holder = new THREE.Group();
+  Object.assign(viewmodel, { camera: new THREE.PerspectiveCamera(60, 4 / 3), root: new THREE.Group(), holder,
+    bobTime: 0, lastSpeed: 0, lastFacing: null, current: null });
+  const preference = { ...viewPresets.classic };
+  viewmodel.configure(preference); preference.x = 0;
+  viewmodel.resize(16 / 9);
+  const expected = 2 * Math.atan(Math.tan(68 * Math.PI / 360) * 0.75) * 180 / Math.PI;
+  assert.equal(viewmodel.camera.aspect, 16 / 9); assert.equal(viewmodel.camera.fov, expected);
+  viewmodel.update({ speed: 0, grounded: true, yaw: 0, pitch: 0, dt: 1 / 60, leftHand: true });
+  assert.equal(holder.position.x, 2.5); assert.equal(holder.position.y, -1.5); assert.equal(Math.abs(holder.position.z), 0);
+  assert.equal(viewmodel.root.scale.x, -1);
+});
 
 test('Interrupted knife actions keep only one animation completion listener', () => {
   const mixer = new THREE.AnimationMixer(new THREE.Object3D());

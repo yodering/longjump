@@ -15,7 +15,7 @@ a { color: inherit; }
 button:disabled { opacity: .5; cursor: wait; }
 button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 [hidden] { display: none !important; }
-#world { position: fixed; inset: 0; }
+#world { position: fixed; inset: 0; background: #000; }
 #world canvas { display: block; width: 100%; height: 100%; }
 .topbar {
   position: fixed; inset: 0 0 auto; height: 48px; z-index: 4;
@@ -63,7 +63,8 @@ input[type=range] { cursor: pointer; }
 .menu-footer button { border: 0; padding: 0; background: none; color: #ccc; font-size: 11px; }
 .setting-range { display: flex; justify-content: space-between; font-size: 12px; color: #ccc; margin: 0 0 9px; }
 .setting-range output { font: 11px var(--mono); }
-#settings-tab>input { width: 100%; height: 4px; margin: 0 0 19px; }
+#settings-tab>input[type=range], .settings-section>input[type=range] { width: 100%; height: 4px; margin: 0 0 19px; }
+#settings-tab>input[type=number] { width: 100%; background: #303030; color: inherit; border: 1px solid #666; padding: 6px; margin-bottom: 12px; }
 .toggle-row { display: flex; align-items: center; justify-content: space-between; font-size: 12px; margin: 9px 0; }
 .toggle-row input { width: 14px; height: 14px; }
 .toggle-row select { background: #2b2b2b; color: inherit; border: 1px solid #666; font: 11px var(--mono); padding: 3px 6px; }
@@ -108,10 +109,32 @@ input[type=range] { cursor: pointer; }
 .pb-row strong { color: #ddd; font: 14px var(--mono); }
 .last-note { color: #bbb; font: 9px var(--mono); line-height: 1.5; margin-top: 10px; }
 .failed, .distance>span.miss { color: #d5a58c !important; }
-#crosshair { position: fixed; left: 50%; top: 50%; width: 10px; height: 10px; transform: translate(-50%, -50%); filter: drop-shadow(0 1px 1px #000); }
-#crosshair i { position: absolute; background: #eee; }
-#crosshair i:first-child { width: 10px; height: 1px; top: 4.5px; }
-#crosshair i:last-child { height: 10px; width: 1px; left: 4.5px; }
+#crosshair { position: fixed; left: 50%; top: 50%; pointer-events: none; }
+.cs-crosshair { position: absolute; left: 50%; top: 50%; width: 0; height: 0; opacity: var(--crosshair-alpha); }
+.cs-crosshair i, .cs-crosshair b { position: absolute; background: var(--crosshair-color); box-shadow: var(--crosshair-outline); }
+.cs-crosshair i:nth-child(-n+2) { width: var(--crosshair-size); height: var(--crosshair-thickness); }
+.cs-crosshair i:nth-child(1) { transform: translate(calc(-1 * (var(--crosshair-gap) + var(--crosshair-size))), -50%); }
+.cs-crosshair i:nth-child(2) { transform: translate(var(--crosshair-gap), -50%); }
+.cs-crosshair i:nth-child(n+3) { width: var(--crosshair-thickness); height: var(--crosshair-size); }
+.cs-crosshair i:nth-child(3) { transform: translate(-50%, calc(-1 * (var(--crosshair-gap) + var(--crosshair-size)))); }
+.cs-crosshair i:nth-child(4) { transform: translate(-50%, var(--crosshair-gap)); }
+.cs-crosshair b { display: var(--crosshair-dot); width: var(--crosshair-thickness); height: var(--crosshair-thickness); transform: translate(-50%, -50%); }
+.crosshair-preview { position: relative; height: 64px; margin: 12px 0; background: #111; border: 1px solid #444; }
+.settings-section { padding: 13px 0; border-bottom: 1px solid #444; font-size: 12px; }
+.settings-section>summary { cursor: pointer; color: #ddd; margin-bottom: 12px; }
+.settings-section:not([open])>summary { margin-bottom: 0; }
+.settings-section .toggle-row { gap: 8px; }
+.settings-section select { max-width: 185px; }
+.settings-section .setting-note { margin: 10px 0; }
+.settings-section input[type=color] { width: 38px; height: 24px; padding: 0; border: 1px solid #555; background: #222; }
+.binding-row { display: flex; justify-content: space-between; gap: 8px; align-items: center; padding: 7px 0; border-bottom: 1px solid #383838; font-size: 11px; }
+.binding-row>span { flex: 0 0 96px; }
+.binding-buttons, .settings-buttons { display: flex; flex-wrap: wrap; gap: 5px; }
+.binding-buttons { justify-content: flex-end; }
+.binding-buttons button, .settings-button { background: #303030; color: #ddd; border: 1px solid #555; border-radius: 2px; padding: 5px 7px; font-size: 10px; }
+.binding-buttons button:hover, .settings-button:hover { background: #403c32; }
+#config-report { margin: 12px 0; font-size: 11px; }
+#config-report pre { white-space: pre-wrap; overflow-wrap: anywhere; font: 10px/1.5 var(--mono); max-height: 200px; overflow: auto; color: #bbb; }
 .info-panel { position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%); text-align: center; font: 15px/1.45 Arial, Helvetica, sans-serif; color: #f2f2f2; text-shadow: 0 1px 2px #000, 0 0 4px #000; white-space: nowrap; }
 .info-panel b { font-weight: 700; }
 #keys { font-family: var(--mono); letter-spacing: .5px; }
