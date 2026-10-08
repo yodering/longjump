@@ -123,6 +123,7 @@ let plotPath: Vec[] = [], plotLanded = false;
 const sounds = new Sounds(); sounds.enabled = settings.sound; sounds.volume = settings.volume;
 const writeSettings = () => { try { localStorage.setItem('vnl-settings', JSON.stringify(settings)); } catch { /* Private mode can disallow storage. */ } };
 function applyPreferences() {
+  movement.autoBhop = settings.autoBhop;
   document.documentElement.dataset.mode = settings.appearance;
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', getComputedStyle(document.documentElement).getPropertyValue('--neutral-1').trim());
   if (plotPath.length) drawPath(plotPath, plotLanded);

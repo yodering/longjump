@@ -63,3 +63,9 @@ test('Malformed stored preferences recover defaults, preserve explicit unbound a
   assert.deepEqual(s.bindings.jump, []); assert.deepEqual(s.bindings.duck, ['Mouse2']);
   assert.equal(s.bindings.heavy.length, 0); assert.equal(s.crosshair.color, '#eeeeee');
 });
+test('Auto bunnyhop defaults off and restores only boolean preferences', () => {
+  assert.equal(normalizeSettings(null).autoBhop, false);
+  assert.equal(normalizeSettings({ autoBhop: true }).autoBhop, true);
+  assert.equal(normalizeSettings({ autoBhop: false }).autoBhop, false);
+  assert.equal(normalizeSettings({ autoBhop: 'true' }).autoBhop, false);
+});

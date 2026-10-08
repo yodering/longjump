@@ -46,6 +46,28 @@ for (const tickRate of [64, 128] as const) {
     assert.ok(m.result.distance > 222 && m.result.distance < 228, `distance ${m.result.distance}`);
     assert.equal(m.grounded, true); assert.equal(m.jump, null); assert.equal(m.velocity.z, 0);
   });
+  test(`${tickRate}t: auto bunnyhop repeats held jumps until disabled or released`, () => {
+    const m = new Movement(); m.tickRate = tickRate; flat(m); m.autoBhop = true;
+    let landings = 0; m.onResult = () => landings++;
+    for (let t = 0; t < tickRate * 2; t++) m.step({ ...idle, jump: true });
+    assert.ok(landings >= 2); assert.ok(m.jump); assert.equal(m.grounded, false);
+    m.autoBhop = false;
+    for (let t = 0; t < tickRate * 2; t++) m.step({ ...idle, jump: true });
+    assert.equal(m.grounded, true); assert.equal(m.jump, null);
+    m.step(idle); m.step({ ...idle, jump: true });
+    assert.equal(m.grounded, false);
+    m.autoBhop = true;
+    for (let t = 0; t < tickRate * 2; t++) m.step(idle);
+    assert.equal(m.grounded, true); assert.equal(m.jump, null);
+  });
+  test(`${tickRate}t: auto bunnyhop retains vanilla takeoff speed and stamina`, () => {
+    const manual = new Movement(), auto = new Movement();
+    for (const m of [manual, auto]) { m.tickRate = tickRate; flat(m); m.velocity.y = 400; m.stamina = 20; }
+    auto.autoBhop = true; auto.jumpHeld = true;
+    manual.step({ ...idle, jump: true }); auto.step({ ...idle, jump: true });
+    assert.deepEqual(auto.velocity, manual.velocity); assert.equal(auto.stamina, manual.stamina);
+    assert.ok(auto.jump!.preSpeed > 274.9 && auto.jump!.preSpeed <= 275);
+  });
   const gap = 246;
   test(`${tickRate}t: coordinated air strafes can clear ${gap}; forward-only cannot`, () => {
     const m = new Movement(gap); m.tickRate = tickRate; m.position.y = 14; m.velocity.y = 250;

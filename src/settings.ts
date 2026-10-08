@@ -8,7 +8,7 @@ export type Resolution = keyof typeof resolutions;
 export type ViewSettings = { fov: number; x: number; y: number; z: number; bobLower: number; bobLat: number; bobVert: number; bobCycle: number };
 export type CrosshairSettings = { size: number; gap: number; thickness: number; color: string; alpha: number; dot: boolean; outline: boolean };
 export type Settings = { mapId: MapId; volume: number; tickRate: 64 | 128; sensitivity: number; mouseYaw: number; mousePitch: number;
-  invertY: boolean; jumpStats: boolean; sound: boolean; trail: boolean; viewmodel: boolean; leftHand: boolean; team: 'ct' | 't';
+  invertY: boolean; autoBhop: boolean; jumpStats: boolean; sound: boolean; trail: boolean; viewmodel: boolean; leftHand: boolean; team: 'ct' | 't';
   appearance: 'dark' | 'light'; resolution: Resolution; scaling: 'stretch' | 'fit'; view: ViewSettings; crosshair: CrosshairSettings; bindings: Bindings };
 export const viewPresets: Record<string, ViewSettings> = {
   desktop: { fov: 60, x: 1, y: 1, z: -1, bobLower: 21, bobLat: 0.4, bobVert: 0.25, bobCycle: 0.98 },
@@ -18,7 +18,7 @@ export const viewPresets: Record<string, ViewSettings> = {
 export const viewRanges = { fov: [54, 68, 1], x: [-2, 2.5, 0.1], y: [-2, 2, 0.1], z: [-2, 2, 0.1],
   bobLower: [5, 30, 1], bobLat: [0.1, 2, 0.05], bobVert: [0.1, 2, 0.05], bobCycle: [0.1, 2, 0.01] } as const;
 export const defaults: Settings = { mapId: 'longjump_source_go', volume: 0.6, tickRate: 64, sensitivity: 2.4,
-  mouseYaw: 0.022, mousePitch: 0.022, invertY: false, jumpStats: false, sound: true, trail: true,
+  mouseYaw: 0.022, mousePitch: 0.022, invertY: false, autoBhop: false, jumpStats: false, sound: true, trail: true,
   viewmodel: true, leftHand: false, team: 'ct', appearance: 'dark', resolution: 'native', scaling: 'stretch', view: { ...viewPresets.desktop },
   crosshair: { size: 4, gap: 2, thickness: 1, color: '#eeeeee', alpha: 1, dot: false, outline: true }, bindings: normalizeBindings(null) };
 export function bounded(value: unknown, fallback: number, min: number, max: number) {
@@ -38,7 +38,7 @@ export function normalizeSettings(value: unknown): Settings {
   settings.volume = bounded(raw.volume, defaults.volume, 0, 1);
   settings.mouseYaw = bounded(raw.mouseYaw, defaults.mouseYaw, 0.001, 0.1);
   settings.mousePitch = bounded(raw.mousePitch, defaults.mousePitch, 0.001, 0.1);
-  for (const name of ['invertY', 'jumpStats', 'sound', 'trail', 'viewmodel', 'leftHand'] as const)
+  for (const name of ['invertY', 'autoBhop', 'jumpStats', 'sound', 'trail', 'viewmodel', 'leftHand'] as const)
     if (typeof raw[name] === 'boolean') settings[name] = raw[name];
   for (const name of Object.keys(viewRanges) as (keyof ViewSettings)[]) {
     const [min, max] = viewRanges[name]; settings.view[name] = bounded(raw.view?.[name], defaults.view[name], min, max);

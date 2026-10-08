@@ -57,6 +57,7 @@ export class Movement {
   // m_bDucked selects the hull; m_bDucking is a transition in progress; FL_DUCKING is duckFlag.
   ducked = false; ducking = false; duckFlag = false; duckAmount = 0; duckSpeed = RULES.duckSpeedIdeal;
   stamina = 0; jumpHeld = false; fallVelocity = 0;
+  autoBhop = false;
   // m_surfaceFriction: CategorizePosition sets 0.25 while airborne and rising (the "deadstrafe"); AirAccelerate reads it.
   surfaceFriction = 1;
   viewOffset = RULES.viewHeight; viewPunch = 0;
@@ -230,7 +231,7 @@ export class Movement {
   private checkJumpButton(input: Input) {
     const v = this.velocity, p = this.position;
     if (!this.grounded) { this.jumpHeld = true; return; }
-    if (this.jumpHeld) return; // don't pogo stick
+    if (this.jumpHeld && !this.autoBhop) return;
     // PreventBunnyJumping
     const sp = length(v), limit = 1.1 * RULES.maxSpeed;
     if (sp > limit) { const f = limit / sp; v.x *= f; v.y *= f; v.z *= f; }

@@ -16,6 +16,8 @@ export class SettingsPanel {
         <button id="bindings-reset" class="settings-button">Restore default binds</button>
         <p class="setting-note">LJ bind: jump + duck, release forward/back. Release the bind to stand, then duck again before landing.</p>
         <label class="toggle-row">Invert mouse Y <input id="invert-y" type="checkbox"/></label>
+        <label class="toggle-row">Auto bunnyhop <input id="auto-bhop" type="checkbox" aria-describedby="auto-bhop-note"/></label>
+        <p id="auto-bhop-note" class="setting-note">Hold jump to hop again on landing.</p>
       </details>
       <details class="settings-section"><summary>Display</summary>
         <label class="toggle-row">Theme <select id="appearance"><option value="dark">Dark</option><option value="light">Light</option></select></label>
@@ -46,6 +48,7 @@ export class SettingsPanel {
     `);
     this.on('bindings-reset', 'click', () => { settings.bindings = normalizeBindings(null); this.capture = null; this.commit(); this.status('Default binds restored.'); });
     this.on('invert-y', 'change', () => { settings.invertY = this.input('invert-y').checked; this.commit(); });
+    this.on('auto-bhop', 'change', () => { settings.autoBhop = this.input('auto-bhop').checked; this.commit(); });
     for (const id of ['resolution', 'scaling', 'appearance'] as const) this.on(id, 'change', () => {
       Object.assign(settings, { [id]: this.input(id).value }); this.commit();
     });
@@ -116,6 +119,7 @@ export class SettingsPanel {
   render() {
     this.renderBindings(); const s = this.settings;
     this.input('invert-y').checked = s.invertY;
+    this.input('auto-bhop').checked = s.autoBhop;
     this.input('appearance').value = s.appearance; this.input('resolution').value = s.resolution; this.input('scaling').value = s.scaling;
     this.input('view-preset').value = Object.entries(viewPresets).find(([, v]) => Object.keys(viewRanges).every(k => v[k as keyof typeof v] === s.view[k as keyof typeof v]))?.[0] ?? 'custom';
     for (const key of Object.keys(viewRanges) as (keyof Settings['view'])[]) {
