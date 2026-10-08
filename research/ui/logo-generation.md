@@ -1,0 +1,17 @@
+# Original longjump mark
+
+Generated with the built-in imagegen tool. The installed version is an original white terrorist-style jumping silhouette on black, with a balaclava, rolled sleeves, cargo pants, boots, low-held knife and two curved trails. Existing KZ branding was used as a general stylistic direction, not supplied as an edit target. Earlier textured transparent drafts were discarded.
+
+Full-size artwork: `public/longjump-logo.png`, 1254×1254 PNG. Browser favicons: `public/favicon-32.png`, `public/favicon-64.png`. Apple icon: `public/apple-touch-icon.png`, 180×180. Derivatives exported with macOS sips. The previous hand-drawn SVG remains in the project but is no longer referenced by index.html.
+
+Build passed. Browser confirmed image loads and native dimensions, checked the artwork rendered at 128/64/32/16px, and confirmed title `longjump` plus the installed favicon and Apple icon links. Temporary review page removed. Preview: `artifacts/terrorist-logo-preview.png`.
+
+## Final generation prompt
+
+Create a favicon / esports logo, a SIMPLE SOLID WHITE SILHOUETTE ON PURE BLACK BACKGROUND. Single square finished icon. Think a traditional KZ jumping player silhouette, but an original character and different pose. Side-on Counter-Strike TERRORIST model: BALACLAVA with one thick BLACK EYE SLIT, rolled-up civilian shirt sleeves, cargo pants, boots, NOT a helmeted counter-terrorist. Player airborne, leaning forward, compact crouched long-jump pose, forward knee raised and rear foot tucked back, one arm extended for balance and the other holding a SMALL KNIFE downward. Draw realistic proportions as a FLAT SOLID SHAPE with smooth vector contours, zero internal rendering except a few LARGE black cutouts that separate the limbs and identify the eye slit. No outline drawing, no sketch lines, no hatching, no texture, no gray. This is a bold two-color PICTOGRAM, not detailed character illustration. Add just TWO CLEAN SHORT CURVED WHITE MOTION STREAKS behind the jumping figure. The mark must be coherent and chunky enough to recognize at 16-32 pixels. Center whole subject with 10 percent black margin on ALL sides. No letters, text, ring, crest, border, gradient, shading, sparkles, splatter or watermark.
+
+## Centered favicon revision
+
+Menu now reads `longjump` / `cs:go long jump practice`, with no logo in its heading. Favicon-only artwork is saved separately as `public/longjump-player-centered.png`; favicon derivatives are `favicon-centered-32.png`, `favicon-centered-64.png` and `apple-touch-icon-centered.png`. New filenames avoid stale favicon caches and preserve the approved trail version. Used built-in imagegen editing, then sips for size exports.
+
+Edit prompt: Edit this existing logo with two precise changes only. 1. Completely REMOVE the two separate white curved motion lines at lower left, replacing their pixels with pure black background. 2. Reposition the remaining jumping player as a single unchanged group so the player's full silhouette including both arms, knife, both boots and head is centered horizontally and vertically within the square. Enlarge slightly if necessary to give approximately equal 12 percent margins around the widest/tallest bounds. Preserve the EXACT character pose, proportions, contour details, balaclava eye slit, knife, white fill and black cutouts. Do not redraw or reinterpret the player. Keep pure black background. No trails, swooshes, movement lines, letters, circles, shadows or additional elements. One square centered-player logo.

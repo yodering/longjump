@@ -7,7 +7,7 @@ test('LJ bind cancels forward/back until physical release and re-press, without 
   const bindings = normalizeBindings(null); assignBinding(bindings, 'longJump', 'Mouse2');
   const controls = new Controls(bindings);
   controls.down('KeyW'); controls.down('KeyD');
-  assert.equal(controls.tick(0).forward, 1);
+  assert.equal(controls.tick(0).forward, 0.5);
   controls.down('Mouse2');
   const takeoff = controls.tick(0);
   assert.equal(takeoff.forward, 0); assert.equal(takeoff.side, 1);
@@ -15,7 +15,7 @@ test('LJ bind cancels forward/back until physical release and re-press, without 
   controls.up('Mouse2');
   assert.equal(controls.tick(0).jump, false); assert.equal(controls.snapshot(0).duck, false);
   assert.equal(controls.tick(0).forward, 0);
-  controls.up('KeyW'); controls.down('KeyW'); assert.equal(controls.tick(0).forward, 1);
+  controls.up('KeyW'); controls.down('KeyW'); assert.equal(controls.tick(0).forward, 0.5);
   assert.equal(bindings.heavy.length, 0);
 });
 test('Quick key, wheel and LJ taps survive until a physics tick; held keys never auto-bhop', () => {

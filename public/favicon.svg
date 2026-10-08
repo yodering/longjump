@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>Jumping player with a jump trail</title>
+  <rect width="64" height="64" rx="14" fill="#171719"/>
+  <g fill="none" stroke="#fafafa" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Balaclava and eye opening. -->
+    <path d="M40 10a5 5 0 1 1 8 6l-1 4-7-2-1-4z"/>
+    <path d="m43 13 4 1" stroke-width="2"/>
+    <!-- Leaning torso, bent arms and tucked legs. -->
+    <path d="m39 21-6 11 8 5 8-12-10-4z"/>
+    <path d="m38 23-9-3-3-8m20 13 9 3 5-7"/>
+    <path d="m40 36 10 6-3 10 7 2m-20-21-8 11-9-6-3 4"/>
+    <!-- Curved trail following the jump. -->
+    <path d="M6 22c4 5 10 8 18 8" stroke-opacity=".65"/>
+    <path d="M5 31c3 3 6 5 11 6" stroke-opacity=".35"/>
+  </g>
+</svg>

@@ -152,3 +152,62 @@ test('An in-place jump is measured, but is ineligible for a long-jump best', () 
   assert.equal(m.result?.landed, true); assert.equal(m.result?.distance, 32);
   assert.equal(m.result?.valid, false); assert.equal(m.result?.reason, 'Short jump');
 });
+
+test('Corner contacts choose the epsilon-expanded entry plane, without inventing near misses', () => {
+  const m = new Movement();
+  m.boxes = [{ id: 'corner', min: { x: 0, y: 0, z: -100 }, max: { x: 100, y: 100, z: 200 } }];
+  const tr = m.trace({ x: -66, y: -16.51, z: 0 }, { x: 34, y: -15.51, z: 0 });
+  assert.deepEqual(tr.normal, { x: -1, y: 0, z: 0 });
+  assert.ok(Math.abs(tr.end.x - (-16 - DIST_EPSILON)) < 1e-9);
+  assert.equal(m.trace({ x: -20, y: 0, z: 0 }, { x: -16.01, y: 0, z: 0 }).fraction, 1);
+});
+
+for (const tickRate of [64, 128] as const) {
+  test(`${tickRate}t: releasing crouch onto the floor measures the current position`, () => {
+    const m = new Movement(); m.tickRate = tickRate; flat(m); m.velocity.y = 250;
+    m.step({ ...idle, jump: true }); m.step({ ...idle, duck: true });
+    while (m.velocity.z > 0 || m.position.z > 10.5) m.step({ ...idle, duck: true });
+    // At 64 tick we may skip the 9..11 interval; position this case explicitly.
+    m.position.z = 10;
+    const y = m.position.y;
+    m.step(idle);
+    assert.equal(m.result?.landed, true);
+    assert.equal(m.result?.path.at(-1)?.y, y);
+    assert.ok(Math.abs(m.result!.distance - (y + 240 + 32)) < 1e-9);
+  });
+
+  test(`${tickRate}t: stairs up to 18 units climb, taller walls slide without losing tangent speed`, () => {
+    for (const height of [18, 19]) {
+      const m = new Movement(); m.tickRate = tickRate; flat(m);
+      m.boxes.push({ id: 'step', min: { x: -1000, y: 0, z: 0 }, max: { x: 1000, y: 200, z: height } });
+      m.reset({ x: 0, y: -20, z: DIST_EPSILON }); m.velocity = { x: 100, y: 200, z: 0 };
+      for (let tick = 0; tick < 8; tick++) m.step({ ...idle, side: 1, forward: 1 });
+      if (height === 18) { assert.ok(m.position.y > -16); assert.ok(Math.abs(m.position.z - height - DIST_EPSILON) < 1e-9); }
+      else { assert.equal(m.position.y, -16 - DIST_EPSILON); assert.equal(m.velocity.y, 0); assert.ok(m.velocity.x > 100); }
+    }
+  });
+
+  test(`${tickRate}t: ceiling collision cancels ascent and keeps lateral momentum`, () => {
+    const m = new Movement(); m.tickRate = tickRate; flat(m);
+    m.boxes.push({ id: 'ceiling', min: { x: -1000, y: -1000, z: 100 }, max: { x: 1000, y: 1000, z: 120 } });
+    m.velocity.y = 250;
+    m.step({ ...idle, jump: true });
+    while (m.velocity.z > 0) m.step(idle);
+    assert.ok(m.position.z <= 28 - DIST_EPSILON);
+    assert.equal(m.velocity.y, 250); assert.equal(m.jump?.valid, false);
+  });
+}
+
+test('Resetting in the air cannot grant a ground jump; gravity respects the final velocity cap', () => {
+  const m = new Movement(); flat(m); m.reset({ x: 0, y: 0, z: 100 });
+  assert.equal(m.grounded, false);
+  m.step({ ...idle, jump: true }); assert.ok(m.velocity.z < 0); assert.equal(m.jump, null);
+  m.boxes = []; m.velocity.z = -3500;
+  m.step(idle); assert.equal(m.velocity.z, -3500);
+});
+
+test('Half-strength press and subsequent held strafe count as one strafe', () => {
+  const m = new Movement(); flat(m); m.velocity.y = 250;
+  m.step({ ...idle, jump: true, side: 0.5 }); m.step({ ...idle, side: 1 });
+  assert.equal(m.jump?.strafes.length, 1);
+});

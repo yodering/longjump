@@ -1,3 +1,4 @@
+import { createElement, Plus, X } from 'lucide';
 import { actions, assignBinding, normalizeBindings, tokenLabel, validToken, type Action } from './bindings.ts';
 import { normalizeSettings, resolutions, viewPresets, viewRanges, type Settings } from './settings.ts';
 import { exportConfig, importConfig, type ConfigReport } from './config.ts';
@@ -11,16 +12,17 @@ export class SettingsPanel {
   constructor(private root: HTMLElement, private settings: Settings, private changed: () => void) {
     root.insertAdjacentHTML('afterbegin', `
       <details class="settings-section" open><summary>Controls</summary>
-        <div id="binding-list"></div><p id="binding-status" role="status" class="setting-note">Choose Add, then press a key, mouse button or scroll. Esc cancels.</p>
+        <div id="binding-list"></div><p id="binding-status" role="status" class="setting-note">Select + to add a bind, then press a key, mouse button or scroll. Esc cancels.</p>
         <button id="bindings-reset" class="settings-button">Restore default binds</button>
         <p class="setting-note">LJ bind: jump + duck, release forward/back. Release the bind to stand, then duck again before landing.</p>
         <label class="toggle-row">Invert mouse Y <input id="invert-y" type="checkbox"/></label>
       </details>
       <details class="settings-section"><summary>Display</summary>
+        <label class="toggle-row">Theme <select id="appearance"><option value="dark">Dark</option><option value="light">Light</option></select></label>
         <label class="toggle-row">Render resolution <select id="resolution">${Object.entries(resolutions).map(([id, name]) => `<option value="${id}">${name}</option>`).join('')}</select></label>
         <label class="toggle-row">Scaling <select id="scaling"><option value="stretch">Stretched</option><option value="fit">Black bars</option></select></label>
         <button id="settings-fullscreen" class="settings-button">Toggle fullscreen</button>
-        <p class="setting-note">Game FOV uses CS:GO's 90° baseline. Resolution changes the rendered view; it does not change your monitor mode.</p>
+        <p class="setting-note">90° FOV at 4:3, matching CS:GO.</p>
       </details>
       <details class="settings-section"><summary>Viewmodel</summary>
         <label class="toggle-row">Preset <select id="view-preset"><option value="custom">Custom</option><option value="desktop">Desktop</option><option value="couch">Couch</option><option value="classic">Classic</option></select></label>
@@ -44,7 +46,7 @@ export class SettingsPanel {
     `);
     this.on('bindings-reset', 'click', () => { settings.bindings = normalizeBindings(null); this.capture = null; this.commit(); this.status('Default binds restored.'); });
     this.on('invert-y', 'change', () => { settings.invertY = this.input('invert-y').checked; this.commit(); });
-    for (const id of ['resolution', 'scaling'] as const) this.on(id, 'change', () => {
+    for (const id of ['resolution', 'scaling', 'appearance'] as const) this.on(id, 'change', () => {
       Object.assign(settings, { [id]: this.input(id).value }); this.commit();
     });
     this.on('settings-fullscreen', 'click', () => { void (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => this.status('Fullscreen is unavailable in this browser.')); });
@@ -63,7 +65,7 @@ export class SettingsPanel {
       if (!this.pending) return;
       Object.assign(settings, this.pending); this.pending = null; this.capture = null;
       this.commit(); this.root.querySelector<HTMLElement>('#config-apply-row')!.hidden = true;
-      this.root.querySelector<HTMLElement>('#config-status')!.textContent = 'Imported settings applied and saved.';
+      this.root.querySelector<HTMLElement>('#config-status')!.textContent = 'Settings saved.';
     });
     this.on('config-cancel', 'click', () => { this.pending = null; this.root.querySelector<HTMLElement>('#config-apply-row')!.hidden = true; this.root.querySelector<HTMLElement>('#config-status')!.textContent = 'Import cancelled.'; });
     this.on('export-config', 'click', () => this.download('vnl-lj.cfg', exportConfig(settings)));
@@ -92,11 +94,20 @@ export class SettingsPanel {
       const label = document.createElement('span'); label.textContent = actions[action]; row.append(label);
       const binds = document.createElement('div'); binds.className = 'binding-buttons';
       for (const token of this.settings.bindings[action]) {
-        const button = document.createElement('button'); button.textContent = `${tokenLabel(token)} ×`;
+        const button = document.createElement('button'); button.className = 'binding-chip';
+        const key = document.createElement('span'); key.textContent = tokenLabel(token);
+        button.append(key, createElement(X, { class: 'binding-remove', 'aria-hidden': 'true' }));
+        button.title = `Remove ${tokenLabel(token)}`;
         button.setAttribute('aria-label', `Remove ${tokenLabel(token)} from ${actions[action]}`);
         button.addEventListener('click', () => { this.settings.bindings[action] = this.settings.bindings[action].filter(t => t !== token); this.commit(); }); binds.append(button);
       }
-      const add = document.createElement('button'); add.textContent = this.capture === action ? 'Press a key…' : 'Add';
+      const add = document.createElement('button'); add.className = 'binding-add';
+      if (this.capture === action) { add.textContent = 'Press a key…'; add.classList.add('capturing'); }
+      else {
+        add.append(createElement(Plus, { 'aria-hidden': 'true' }));
+        if (!this.settings.bindings[action].length) add.append('Bind');
+      }
+      add.title = `Add binding for ${actions[action]}`;
       add.setAttribute('aria-label', `Add binding for ${actions[action]}`);
       add.addEventListener('click', () => { this.capture = action; this.renderBindings(); this.status(`Press a key, mouse button or scroll for ${actions[action]}. Esc cancels.`); });
       binds.append(add); row.append(binds); list.append(row);
@@ -105,7 +116,7 @@ export class SettingsPanel {
   render() {
     this.renderBindings(); const s = this.settings;
     this.input('invert-y').checked = s.invertY;
-    this.input('resolution').value = s.resolution; this.input('scaling').value = s.scaling;
+    this.input('appearance').value = s.appearance; this.input('resolution').value = s.resolution; this.input('scaling').value = s.scaling;
     this.input('view-preset').value = Object.entries(viewPresets).find(([, v]) => Object.keys(viewRanges).every(k => v[k as keyof typeof v] === s.view[k as keyof typeof v]))?.[0] ?? 'custom';
     for (const key of Object.keys(viewRanges) as (keyof Settings['view'])[]) {
       this.input(`view-${key}`).value = String(s.view[key]); this.root.querySelector(`#view-${key}-output`)!.textContent = String(s.view[key]);
@@ -136,7 +147,7 @@ export class SettingsPanel {
       this.pending = report.applied.length ? report.settings : null;
       this.root.querySelector('#config-status')!.textContent = `${report.applied.length} supported commands, ${report.ignored.length} skipped. ${this.pending ? 'Review the details, then Apply.' : 'No supported settings found.'}`;
       this.root.querySelector<HTMLElement>('#config-report')!.hidden = false;
-      this.root.querySelector('#config-report-text')!.textContent = `Supported (values use the available setting ranges):\n${report.applied.join('\n') || 'None'}\n\nSkipped:\n${report.ignored.join('\n') || 'None'}`;
+      this.root.querySelector('#config-report-text')!.textContent = `Supported:\n${report.applied.join('\n') || 'None'}\n\nSkipped:\n${report.ignored.join('\n') || 'None'}`;
       this.root.querySelector<HTMLElement>('#config-apply-row')!.hidden = !this.pending;
     } catch (error) { this.root.querySelector('#config-status')!.textContent = error instanceof Error ? error.message : 'Could not read this config.'; }
     finally { input.value = ''; }

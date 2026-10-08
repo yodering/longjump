@@ -1,19 +1,39 @@
-# VNL · Long Jump
+# longjump
 
 A desktop browser long-jump practice room inspired by vanilla CS:GO KZ. Two imported 2014 Workshop long-jump maps plus an original concrete practice room, with mouse-look and manual strafing. Built with TypeScript, Three.js and Vite.
 
-Project name: `vnl-lj`.
+Project name: `longjump`.
 
 ## Run
 
 ```sh
-npm ci
-npm run dev
+bun install --frozen-lockfile
+bun run dev
 ```
 
-Use Node.js 22.18 or newer (the tests run TypeScript directly).
+Use Bun 1.4.2 or newer.
 
-Open **http://127.0.0.1:5173/** in a desktop browser with WebGL and pointer-lock support. Click **Play** to capture the mouse. The game also works as a static site: `npm run build` produces `dist/`. `npm run preview` serves that build locally.
+Open **http://127.0.0.1:5173/** in a desktop browser with WebGL and pointer-lock support. Click **Play** to capture the mouse. The game also works as a static site: `bun run build` produces `dist/`. `bun run preview` serves that build locally.
+
+## Hosting
+
+The solo release will use Cloudflare Pages at `https://longjump.ing`. Gameplay runs in the browser; this release needs no game server or database. Settings and records stay in each browser and do not transfer automatically from localhost or preview URLs to the production domain.
+
+Connect `yodering/longjump` to a Cloudflare Pages project with these settings:
+
+| Setting | Value |
+| --- | --- |
+| Root directory | Repository root |
+| Build command | `bun install --frozen-lockfile && bun test && bun run build` |
+| Build output directory | `dist` |
+| Environment variable | `BUN_VERSION=1.4.2` |
+| Environment variable | `SKIP_DEPENDENCY_INSTALL=true` |
+
+Set both variables for production and preview builds. Skipping automatic dependency installation lets the build command explicitly install through Bun with the committed `bun.lock`. See [Cloudflare's build environment documentation](https://developers.cloudflare.com/pages/configuration/build-image/).
+
+Test the Pages preview for map loading, mouse capture, audio, fullscreen, and settings persistence before publishing.
+
+Multiplayer can later add a separate WebSocket server for shared practice rooms and remote player positions. Verified public scores require server-side validation of movement; local records alone are not sufficient.
 
 ## Controls
 
@@ -27,16 +47,18 @@ Open **http://127.0.0.1:5173/** in a desktop browser with WebGL and pointer-lock
 | X / C | Save / return to a standing position (checkpoint beep) |
 | F | Inspect knife |
 | Mouse 1 / Mouse 2 | Light / heavy knife swing (cosmetic) |
-| H | Toggle visual strafe hints |
+| H | Show / hide the jump stats panel |
 | Esc | Release mouse and pause |
 
 These are the default binds. **Settings → Controls** supports keyboard, mouse buttons and wheel directions, multiple binds per action, removing binds and restoring defaults. Escape remains reserved for pausing. The optional **Long jump bind** combines jump + duck and cancels held forward/back until those keys are released and pressed again. Release the LJ bind to stand during flight, then duck again before landing. Attempts record whether the LJ bind was used; it does not automate strafing or landing.
 
-**Settings → Import / export** previews supported commands from a CS:GO `.cfg` before applying them. It imports movement/knife binds, a recognized LJ alias, sensitivity, `m_yaw` / `m_pitch`, handedness, viewmodel offsets/FOV/bob and static crosshair settings. Unsupported binds and commands are listed and skipped; config text never executes. Recursive aliases, null-strafe scripts, `exec`, purchases, networking and movement cvars are outside the importer. Try [examples/longjump.cfg](examples/longjump.cfg). Config import merges supported binds with current binds; exported JSON profiles restore the full preference set, retaining the current map and tick rate. Exported `.cfg` files carry the supported Source-style settings; checkpoint/hint commands use VNL-specific names.
+**Settings → Import / export** previews supported commands from a CS:GO `.cfg` before applying them. It imports movement/knife binds, a recognized LJ alias, sensitivity, `m_yaw` / `m_pitch`, handedness, viewmodel offsets/FOV/bob and static crosshair settings. Unsupported binds and commands are listed and skipped; config text never executes. Recursive aliases, null-strafe scripts, `exec`, purchases, networking and movement cvars are outside the importer. Try [examples/longjump.cfg](examples/longjump.cfg). Config import merges supported binds with current binds; exported JSON profiles restore the full preference set, retaining the current map and tick rate. Exported `.cfg` files carry the supported Source-style settings; checkpoint/stats commands use VNL-specific names.
 
 **Settings → Display** offers native resolution and fixed presets including 1440×1080, with stretched presentation or black bars, plus fullscreen. These change the browser's render buffer and projection, not the monitor's display mode. Gameplay FOV stays at the CS:GO 90° baseline (horizontal at 4:3). Viewmodel presets, offsets, bob and static crosshair geometry have live previews. Preferences save in this browser automatically.
 
-Run toward the takeoff edge at 250 u/s, jump, release W, and alternate A with a left mouse turn and D with a right mouse turn. Duck before landing. Use **Maps** to choose a room, then walk or jump to the block you want to practice. Every gap is fixed; there is no gap selector or block teleport. The courtyard uses its original spawn area. The cropped GO wing spawns at its entrance walkway. Concrete has fixed 220, 230, 240, 250 and 260-unit lanes, accessible via its rear walkway. Save a practice position with X and return with C or R.
+Run toward the takeoff edge at 250 u/s, jump, release W, and alternate A with a left mouse turn and D with a right mouse turn. Duck before landing. Use **Maps** to choose a room, then walk or jump to the block you want to practice. The courtyard uses its original spawn area. The cropped GO wing spawns at its entrance walkway. Concrete has 220, 230, 240, 250 and 260-unit lanes, accessible via its rear walkway. Save a practice position with X and return with C or R.
+
+The jump stats panel starts hidden. Press H or use Show stats while playing to toggle it; the choice saves in this browser and is also available in Settings.
 
 The HUD follows GOKZ: a center info panel with speed (takeoff speed in parentheses while airborne) and held keys (`W A S D C J`), a chat-style jumpstats report coloured by distance tier (strafes, sync, pre, max, edge, height, airtime ticks, overlap, dead air, average strafe width), and a console-style per-strafe table (sync, gain, loss, max, air share, width) beside a top-down jump path. Session history (100 attempts) and personal bests are saved in this browser. Only valid landed jumps count as bests, and bests are separated by map and tick rate. A miss leaves you on the walkable courtyard or pit floor. Only falling out of the map resets you to your saved position or entrance. R returns immediately.
 
@@ -66,25 +88,27 @@ The controller runs at a fixed 64 or 128 ticks per second, independent of drawin
 7. `CategorizePosition`: the 2-unit ground trace, skipped above 140 u/s upward. When airborne and rising it sets `m_surfaceFriction` to 0.25 for the next tick (the [deadstrafe](https://gist.github.com/zer0k-z/808bc8bfc494e0bbb5a423c2b1ca6685)).
 8. `FinishGravity` and `CheckFalling`: the landing stamina cost `0.05 × fall speed` and CS:GO's landing view punch (≥ 0.75°, decaying at `view_punch_decay` 18).
 
-The camera interpolates the eye between ticks the way the client renders the predicted player; there is no extra smoothing. There is no KZ prestrafe boost, auto-strafe, auto-bhop or movement assistance.
+Keyboard and mouse events are timestamped and consumed by the next physics command. Render catch-up ticks cannot reuse future input. Movement keys use Source’s `CInput::KeyState` fractions for presses, taps, holds and re-presses. The camera uses current mouse look with eye-position interpolation between completed ticks. Frames up to 250 ms catch up without dropping physics time; longer stalls suspend the simulation and discard pending taps. There is no KZ prestrafe boost, auto-strafe, auto-bhop or movement assistance.
 
 Remaining differences from the game:
 
 - Collision runs against the maps' axis-aligned brush boxes, not BSP brushes, so there are no slopes or ramps. The quadrant ground fallback (`TracePlayerBBoxForGround`) only matters on slopes and is omitted. Concrete room walls are decorative. The courtyard and pit floors remain walkable after misses; only falling outside the imported geometry resets the player. Ladders, water and surface properties (all friction 1) are outside this prototype.
 - Math is double precision; Source uses 32-bit floats, so positions differ in the far decimals.
 - Distance is horizontal origin displacement plus 32 units, with GOKZ's interpolated touchdown origin. Edge is the distance from the takeoff block edge to the back of the hull. Misses are measured at the takeoff elevation. Touching any non-floor surface invalidates a jump, and jumps below 200 units do not count as bests. Sync is the share of airborne ticks with horizontal speed gain. These follow KZ conventions but are not certified GOKZ scores.
-- Mouse sensitivity defaults to Source's 0.022° per browser pixel, with imported `m_yaw` / `m_pitch` support; browser mouse acceleration and DPI can differ from CS:GO raw input. FOV follows Source's horizontal-at-4:3 convention, as does the viewmodel's. Crosshair sizes are CSS pixels and approximate Source's static crosshair rather than reproducing its resolution-dependent rasterization.
+- Mouse sensitivity defaults to Source's 0.022° per browser pixel, with imported `m_yaw` / `m_pitch` support; pointer lock requests unaccelerated input, falling back when the browser reports it unsupported. Browser event delivery and DPI can still differ from CS:GO raw input. Pitch is limited to ±89°. FOV follows Source's horizontal-at-4:3 convention, as does the viewmodel's. Crosshair sizes are CSS pixels and approximate Source's static crosshair rather than reproducing its resolution-dependent rasterization.
 
-The constants and code paths match the source tree, but recorded CS:GO demo traces are still the final check for tick-by-tick parity.
+Reference checks and regression tests are documented in [research/movement/README.md](research/movement/README.md). Recorded CS:GO command/state traces are still needed to establish tick-by-tick parity; passing the browser replay tests does not establish that parity.
 
 ## Verification
 
 ```sh
-npm test
-npm run build
+bun test
+bun run build
 ```
 
 The headless movement tests cover both tick rates: maximum ground speed and diagonal input, tick-dependent jump height (54.65 / 55.83), jump-tick gravity ordering, landing at floor + `DIST_EPSILON`, interpolated landing distance, instant 9-unit air duck, ground duck timing with the press penalty, `CanUnduck` headroom, the mid-air duck speed crop, the jump stamina scale, next-tick deadstrafe, air-duck range, no auto-bhop, successful strafing across 246 versus failed forward-only jumps, failed-jump measurement, wish-direction acceleration caps, swept collision and result eligibility.
+
+Timestamped six-strafe replays must produce identical commands, positions and jump results at 30, 60, 144 and 240 FPS and with uneven frames, at both tick rates. Collision regressions cover corner entry planes, steps, wall slides, ceilings and uncrouch landings.
 
 Input/config tests cover LJ cancellation, alternate key releases, quick wheel/key taps, pause cleanup, quoted commands and comments, restricted aliases, bounded settings, config round trips and malformed saved preferences. Display tests cover exact fixed buffers, stretching, black bars, resizing and native pixel density.
 

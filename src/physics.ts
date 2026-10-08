@@ -68,15 +68,18 @@ export class Movement {
   private time = 0; private lastDuckTime = -Infinity; private rawDuck = false; private crouchSpot = { x: 0, y: 0 };
   private maxSpeed = RULES.maxSpeed; private fmove = 0; private smove = 0; private walkButton = false; private duckButton = false;
   private moveStart: Vec = clone(this.position); private moveVelocity: Vec = clone(this.velocity);
+  private airMoved = false;
   constructor(gap = 246) { this.boxes = createMap(gap); }
   get dt() { return 1 / this.tickRate; }
   get hullHeight() { return this.ducked ? RULES.duckHeight : RULES.height; }
   reset(position: Vec = { x: 0, y: -240, z: 0 }) {
     this.position = clone(position); this.velocity = { x: 0, y: 0, z: 0 };
-    this.grounded = true; this.ducked = this.ducking = this.duckFlag = false; this.duckAmount = 0; this.duckSpeed = RULES.duckSpeedIdeal;
+    this.grounded = !!this.support(); this.ducked = this.ducking = this.duckFlag = false; this.duckAmount = 0; this.duckSpeed = RULES.duckSpeedIdeal;
     this.stamina = 0; this.jump = null; this.jumpHeld = false; this.fallVelocity = 0; this.surfaceFriction = 1;
     this.viewOffset = this.previousViewOffset = RULES.viewHeight; this.viewPunch = 0; this.previousPosition = clone(position);
-    this.lastDuckTime = -Infinity; this.rawDuck = false; this.platform = this.support()?.id ?? ''; this.result = null;
+    this.lastDuckTime = -Infinity; this.rawDuck = false; this.crouchSpot = { x: position.x, y: position.y };
+    this.platform = this.support()?.id ?? ''; this.result = null;
+    this.moveStart = clone(position); this.moveVelocity = clone(this.velocity);
   }
   // The box the player stands on, if any (within CategorizePosition's 2 units).
   support() {
@@ -98,16 +101,23 @@ export class Movement {
       const lo = { x: b.min.x - RULES.hull, y: b.min.y - RULES.hull, z: b.min.z - height }, hi = { x: b.max.x + RULES.hull, y: b.max.y + RULES.hull, z: b.max.z };
       const inside = (q: Vec) => (['x', 'y', 'z'] as const).every(a => q[a] > lo[a] && q[a] < hi[a]);
       if (inside(start)) { startsolid = true; if (inside(end)) { allsolid = true; fraction = 0; box = b; } continue; }
-      let enter = -Infinity, exit = Infinity, axis: 'x' | 'y' | 'z' = 'x', sign = 0, miss = false;
+      let enter = -Infinity, exit = Infinity, rawEnter = -Infinity, rawExit = Infinity;
+      let axis: 'x' | 'y' | 'z' = 'x', sign = 0, miss = false;
       for (const a of ['x', 'y', 'z'] as const) {
         if (d[a] === 0) { if (start[a] <= lo[a] || start[a] >= hi[a]) { miss = true; break; } continue; }
         const t1 = (lo[a] - start[a]) / d[a], t2 = (hi[a] - start[a]) / d[a];
-        const near = Math.min(t1, t2), far = Math.max(t1, t2);
+        const first = Math.min(t1, t2), last = Math.max(t1, t2);
+        rawEnter = Math.max(rawEnter, first); rawExit = Math.min(rawExit, last);
+        // IntersectRayWithBoxBrush first checks the unexpanded interval, then
+        // chooses the contact plane using epsilon-expanded crossing planes.
+        if (first < 0 && last > 1) continue;
+        const epsilon = DIST_EPSILON / Math.abs(d[a]);
+        const near = first - epsilon, far = last + epsilon;
         if (near > enter) { enter = near; axis = a; sign = d[a] > 0 ? -1 : 1; }
         exit = Math.min(exit, far);
       }
-      if (miss || enter >= exit || exit <= 0 || enter > 1 || enter < 0) continue;
-      const hit = Math.max(0, enter - DIST_EPSILON / Math.abs(d[axis]));
+      if (miss || rawEnter > rawExit || rawExit <= 0 || rawEnter > 1 || rawEnter < 0 || enter > exit) continue;
+      const hit = Math.max(0, enter);
       if (hit < fraction) { fraction = hit; box = b; normal = { x: 0, y: 0, z: 0 }; normal[axis] = sign; }
     }
     return { fraction, end: { x: start.x + d.x * fraction, y: start.y + d.y * fraction, z: start.z + d.z * fraction }, normal, startsolid, allsolid, box };
@@ -115,7 +125,9 @@ export class Movement {
   step(input: Input) {
     const dt = this.dt, p = this.position, v = this.velocity;
     this.previousPosition = clone(p); this.previousViewOffset = this.viewOffset; this.time += dt;
+    this.airMoved = false;
     this.yaw = input.yaw;
+    this.moveStart = clone(p); this.moveVelocity = clone(v);
     this.checkParameters(input);
     // ReduceTimers
     this.stamina = Math.max(0, this.stamina - dt * RULES.staminaRecovery);
@@ -211,6 +223,7 @@ export class Movement {
     this.categorizePosition();
     this.checkVelocity();
     v.z -= half; // FinishGravity
+    this.checkVelocity();
     if (this.grounded) v.z = 0;
     this.checkFalling();
   }
@@ -288,12 +301,13 @@ export class Movement {
     }
     this.recordAirTick(input, before, speed(v));
     this.moveStart = clone(this.position); this.moveVelocity = clone(v);
+    this.airMoved = true;
     this.tryPlayerMove();
   }
   private recordAirTick(input: Input, before: number, after: number) {
     const jump = this.jump;
     if (!jump) return;
-    const gain = after - before, side = input.side;
+    const gain = after - before, side = Math.sign(input.side);
     jump.ticks++; jump.maxSpeed = Math.max(jump.maxSpeed, after);
     if (gain > 0.0001) jump.synced++;
     if (input.overlap) jump.overlap++; else if (!side) jump.deadAir++;
@@ -399,7 +413,11 @@ export class Movement {
     this.grounded = true; this.platform = box.id; this.velocity.z = 0;
     if (landed && this.jump) {
       const j = this.jump, sameHeight = Math.abs(box.max.z - j.start.z) < 0.1;
-      this.finish(true, box, this.landingOrigin(this.moveStart, this.moveVelocity, sameHeight ? j.start.z : box.max.z + DIST_EPSILON));
+      const groundZ = sameHeight ? j.start.z : box.max.z + DIST_EPSILON;
+      // Uncrouching can put the feet on the floor before AirMove. There is no
+      // airborne segment to extrapolate in that case, and last tick's is stale.
+      const endpoint = this.airMoved ? this.landingOrigin(this.moveStart, this.moveVelocity, groundZ) : { ...this.position, z: groundZ };
+      this.finish(true, box, endpoint);
     }
   }
   private checkFalling() {

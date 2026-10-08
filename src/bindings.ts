@@ -3,14 +3,14 @@ import type { Input } from './physics.ts';
 export const actions = {
   forward: 'Forward', back: 'Back', left: 'Strafe left', right: 'Strafe right', jump: 'Jump',
   duck: 'Duck', walk: 'Walk', longJump: 'Long jump bind', reset: 'Reset', save: 'Save position',
-  return: 'Return to saved position', inspect: 'Inspect knife', light: 'Light swing', heavy: 'Heavy swing', hints: 'Toggle hints',
+  return: 'Return to saved position', inspect: 'Inspect knife', light: 'Light swing', heavy: 'Heavy swing', stats: 'Toggle jump stats',
 } as const;
 export type Action = keyof typeof actions;
 export type Bindings = Record<Action, string[]>;
 export const defaultBindings: Bindings = {
   forward: ['KeyW'], back: ['KeyS'], left: ['KeyA'], right: ['KeyD'], jump: ['Space', 'WheelUp', 'WheelDown'],
   duck: ['ControlLeft', 'ControlRight'], walk: ['ShiftLeft', 'ShiftRight'], longJump: [], reset: ['KeyR'],
-  save: ['KeyX'], return: ['KeyC'], inspect: ['KeyF'], light: ['Mouse0'], heavy: ['Mouse2'], hints: ['KeyH'],
+  save: ['KeyX'], return: ['KeyC'], inspect: ['KeyF'], light: ['Mouse0'], heavy: ['Mouse2'], stats: ['KeyH'],
 };
 export const validToken = (token: unknown): token is string => typeof token === 'string'
   && /^(Key[A-Z]|Digit[0-9]|F([1-9]|1[0-2])|Numpad[0-9]|Numpad(Add|Subtract|Multiply|Divide|Decimal|Enter)|Arrow(Up|Down|Left|Right)|Space|Tab|Enter|Backspace|Delete|Insert|Home|End|PageUp|PageDown|CapsLock|Shift(Left|Right)|Control(Left|Right)|Alt(Left|Right)|Bracket(Left|Right)|Semicolon|Quote|Comma|Period|Slash|Backslash|Minus|Equal|Backquote|Mouse[0-4]|Wheel(Up|Down))$/.test(token);
@@ -18,7 +18,8 @@ export function normalizeBindings(value: unknown): Bindings {
   const source = value && typeof value === 'object' ? value as Partial<Bindings> : {};
   const seen = new Set<string>();
   return Object.fromEntries((Object.keys(actions) as Action[]).map(action => {
-    const candidates = Array.isArray(source[action]) ? source[action] : defaultBindings[action];
+    const saved = source[action] ?? (action === 'stats' ? (source as Partial<Bindings> & { hints?: string[] }).hints : undefined);
+    const candidates = Array.isArray(saved) ? saved : defaultBindings[action];
     const tokens: string[] = [];
     for (const token of candidates) {
       if (tokens.length === 8) break;
@@ -51,36 +52,66 @@ export class Controls {
   private held = new Set<string>();
   private blocked = new Set<string>();
   private pulses = new Set<Action>();
+  private pressed = new Set<Action>();
+  private released = new Set<Action>();
   bindings: Bindings;
   constructor(bindings: Bindings) { this.bindings = bindings; }
   action(token: string) { return (Object.keys(actions) as Action[]).find(a => this.bindings[a].includes(token)); }
   down(token: string): Action | undefined {
     if (this.held.has(token)) return;
-    this.held.add(token);
     const action = this.action(token);
+    if (action && !this.active(action)) this.pressed.add(action);
+    this.held.add(token);
     if (action === 'longJump') this.cancelForward();
     if (action) this.pulses.add(action);
     return action;
   }
-  up(token: string) { this.held.delete(token); this.blocked.delete(token); }
+  up(token: string): undefined {
+    const action = this.action(token), wasActive = action && this.active(action);
+    this.held.delete(token); this.blocked.delete(token);
+    if (action && wasActive && !this.active(action)) this.released.add(action);
+    return undefined;
+  }
   pulse(token: string): Action | undefined {
     const action = this.action(token);
     if (action === 'longJump') this.cancelForward();
-    if (action) this.pulses.add(action);
+    if (action) {
+      this.pulses.add(action);
+      if (!this.active(action)) { this.pressed.add(action); this.released.add(action); }
+    }
     return action;
   }
   private cancelForward() {
     for (const token of this.held) if (['forward', 'back'].includes(this.action(token) ?? '')) this.blocked.add(token);
     this.pulses.delete('forward'); this.pulses.delete('back');
+    for (const action of ['forward', 'back'] as const) { this.pressed.delete(action); this.released.add(action); }
   }
   active(action: Action) { return this.bindings[action].some(token => this.held.has(token) && !this.blocked.has(token)); }
-  clear() { this.held.clear(); this.blocked.clear(); this.pulses.clear(); }
-  clearPulses() { this.pulses.clear(); }
+  clear() { this.held.clear(); this.blocked.clear(); this.clearPulses(); }
+  clearPulses() { this.pulses.clear(); this.pressed.clear(); this.released.clear(); }
+  fork() {
+    const copy = new Controls(this.bindings);
+    copy.held = new Set(this.held); copy.blocked = new Set(this.blocked);
+    return copy;
+  }
   snapshot(yaw: number): Input & { lj: boolean } {
     const on = (a: Action) => this.active(a) || this.pulses.has(a);
     const lj = on('longJump'), left = on('left'), right = on('right');
     return { forward: Number(on('forward')) - Number(on('back')), side: Number(right) - Number(left),
       overlap: left && right, jump: on('jump') || lj, duck: on('duck') || lj, walk: on('walk'), yaw, lj };
   }
-  tick(yaw: number) { const input = this.snapshot(yaw); this.pulses.clear(); return input; }
+  tick(yaw: number) {
+    const input = this.snapshot(yaw);
+    // CInput::KeyState fractions apply to movement axes, not IN_JUMP/IN_DUCK.
+    const amount = (action: Action) => {
+      const down = this.active(action), pressed = this.pressed.has(action), released = this.released.has(action);
+      if (pressed && released) return down ? 0.75 : 0.25;
+      if (pressed) return down ? 0.5 : 0;
+      if (released) return 0;
+      return down ? 1 : 0;
+    };
+    input.forward = amount('forward') - amount('back');
+    input.side = amount('right') - amount('left');
+    this.clearPulses(); return input;
+  }
 }
