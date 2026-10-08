@@ -12,9 +12,15 @@ import { tokenLabel, type Action } from './bindings';
 import { Commands, PITCH_LIMIT, lockMouse } from './commands';
 import { SettingsPanel } from './settings-panel';
 import { jumpFeedMarkup } from './jump-feed';
+import { Engagement } from './engagement';
+import { loadAnalytics } from './analytics';
 
 function read<T>(key: string, fallback: T): T { try { return JSON.parse(localStorage.getItem(key) || 'null') ?? fallback; } catch { return fallback; } }
 const settings = normalizeSettings(read<unknown>('vnl-settings', {}));
+const playContext = () => ({ map: settings.mapId, tick_rate: settings.tickRate, auto_bhop: settings.autoBhop });
+const engagement = new Engagement(loadAnalytics(), playContext());
+window.setInterval(() => engagement.flush(), 30_000);
+window.addEventListener('pagehide', () => engagement.setPlaying(false));
 document.documentElement.dataset.mode = settings.appearance;
 let history = readHistory(read<unknown>('vnl-history', []));
 const app = document.querySelector<HTMLDivElement>('#app')!;
@@ -123,6 +129,7 @@ let plotPath: Vec[] = [], plotLanded = false;
 const sounds = new Sounds(); sounds.enabled = settings.sound; sounds.volume = settings.volume;
 const writeSettings = () => { try { localStorage.setItem('vnl-settings', JSON.stringify(settings)); } catch { /* Private mode can disallow storage. */ } };
 function applyPreferences() {
+  engagement.configure(playContext());
   movement.autoBhop = settings.autoBhop;
   document.documentElement.dataset.mode = settings.appearance;
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', getComputedStyle(document.documentElement).getPropertyValue('--neutral-1').trim());
@@ -188,6 +195,7 @@ async function changeMap(id: MapId) {
     $('start').querySelector('span')!.textContent = 'Play';
     if (!data) world.buildPlatforms(CONCRETE_GAP);
     loadingMap = false; reset(true); clearResult(); writeSettings(); updateSession();
+    engagement.configure(playContext()); engagement.mapLoaded();
     $('start-note').textContent = 'Click Play to capture the mouse.';
   } catch (error) { console.error(error); settings.mapId = previous; $('start-note').textContent = 'Map could not load. Choose a map to retry.'; }
   finally { loadingMap = false; $<HTMLButtonElement>('start').disabled = false; document.querySelectorAll<HTMLButtonElement>('[data-map]').forEach(b => b.disabled = false); }
@@ -201,6 +209,7 @@ function chat(result: Result) {
   while (feed.children.length > 4) feed.firstElementChild!.remove();
 }
 function showResult(result: Result) {
+  engagement.jumpCompleted(result);
   const previousBest = best();
   const entry: Entry = { ...result, path: result.path.map(p => ({ ...p })), at: Date.now(), mapId: settings.mapId, tickRate: settings.tickRate, gap: jumpBlock, ljBind: jumpUsedLJ };
   history.unshift(entry); history = history.slice(0, 100);
@@ -238,6 +247,7 @@ function drawPath(path: Vec[], landed: boolean) {
   for (const [i, p] of path.entries()) { const x = 25 + (p.y - minY) * scale, y = 70 + (p.x - (minX + maxX) / 2) * scale; if (i === 0) c.moveTo(x, y); else c.lineTo(x, y); } c.stroke();
 }
 function setLocked(value: boolean) {
+  engagement.setPlaying(value && !document.hidden);
   locked = value; controls.clear(); settingsPanel.cancelCapture(); lastTime = performance.now(); commands.reset(lastTime, yaw); movement.jumpHeld = false;
   $('menu').hidden = value; $('hud').hidden = !value; $('menu-button').hidden = !value;
   if (value) $<HTMLDetailsElement>('jump-details').open = false;
@@ -293,11 +303,11 @@ document.addEventListener('wheel', event => {
   if (locked) { event.preventDefault(); runAction(commands.button('pulse', token, event.timeStamp)); }
 }, { passive: false });
 addEventListener('blur', () => { controls.clear(); commands.reset(performance.now(), yaw); settingsPanel.cancelCapture(); if (locked) document.exitPointerLock(); });
-document.addEventListener('visibilitychange', () => { if (document.hidden) { controls.clear(); if (locked) document.exitPointerLock(); } lastTime = performance.now(); commands.reset(lastTime, yaw); });
+document.addEventListener('visibilitychange', () => { engagement.setPlaying(locked && !document.hidden); if (document.hidden) { controls.clear(); if (locked) document.exitPointerLock(); } lastTime = performance.now(); commands.reset(lastTime, yaw); });
 $('stats-toggle').addEventListener('click', toggleStatsPanel);
 $('menu-button').addEventListener('click', () => { if (locked) document.exitPointerLock(); });
 document.querySelectorAll<HTMLButtonElement>('[data-map]').forEach(button => button.addEventListener('click', () => void changeMap(button.dataset.map as MapId)));
-$('tick-toggle').addEventListener('click', () => { settings.tickRate = settings.tickRate === 128 ? 64 : 128; movement.tickRate = settings.tickRate; reset(); $('tick-toggle').innerHTML = `${settings.tickRate} tick <i data-lucide="arrow-left-right" aria-hidden="true"></i>`; createIcons({ icons: { ArrowLeftRight }, attrs: { 'aria-hidden': 'true' } }); writeSettings(); updateSession(); });
+$('tick-toggle').addEventListener('click', () => { settings.tickRate = settings.tickRate === 128 ? 64 : 128; engagement.configure(playContext()); movement.tickRate = settings.tickRate; reset(); $('tick-toggle').innerHTML = `${settings.tickRate} tick <i data-lucide="arrow-left-right" aria-hidden="true"></i>`; createIcons({ icons: { ArrowLeftRight }, attrs: { 'aria-hidden': 'true' } }); writeSettings(); updateSession(); });
 $('volume').addEventListener('input', () => { settings.volume = Number($<HTMLInputElement>('volume').value); sounds.volume = settings.volume; $('volume-output').textContent = `${Math.round(settings.volume * 100)}%`; writeSettings(); });
 document.querySelectorAll<HTMLButtonElement>('[data-sample]').forEach(button => button.addEventListener('click', async () => { try { await sounds.unlock(); sounds.play(button.dataset.sample as Sound, true); } catch (error) { console.error(error); $('start-note').textContent = 'Sound files could not load.'; } }));
 $('sensitivity').addEventListener('change', () => {
