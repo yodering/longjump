@@ -2,8 +2,6 @@
 
 A desktop browser long-jump practice room inspired by vanilla CS:GO KZ. Two imported 2014 Workshop long-jump maps plus an original concrete practice room, with mouse-look and manual strafing. Built with TypeScript, Three.js and Vite.
 
-Project name: `longjump`.
-
 ## Run
 
 ```sh
@@ -14,26 +12,6 @@ bun run dev
 Use Bun 1.4.2 or newer.
 
 Open **http://127.0.0.1:5173/** in a desktop browser with WebGL and pointer-lock support. Click **Play** to capture the mouse. The game also works as a static site: `bun run build` produces `dist/`. `bun run preview` serves that build locally.
-
-## Hosting
-
-The solo release will use Cloudflare Pages at `https://longjump.ing`. Gameplay runs in the browser; this release needs no game server or database. Settings and records stay in each browser and do not transfer automatically from localhost or preview URLs to the production domain.
-
-Connect `yodering/longjump` to a Cloudflare Pages project with these settings:
-
-| Setting | Value |
-| --- | --- |
-| Root directory | Repository root |
-| Build command | `bun install --frozen-lockfile && bun test && bun run build` |
-| Build output directory | `dist` |
-| Environment variable | `BUN_VERSION=1.4.2` |
-| Environment variable | `SKIP_DEPENDENCY_INSTALL=true` |
-
-Set both variables for production and preview builds. Skipping automatic dependency installation lets the build command explicitly install through Bun with the committed `bun.lock`. See [Cloudflare's build environment documentation](https://developers.cloudflare.com/pages/configuration/build-image/).
-
-Test the Pages preview for map loading, mouse capture, audio, fullscreen, and settings persistence before publishing.
-
-Multiplayer can later add a separate WebSocket server for shared practice rooms and remote player positions. Verified public scores require server-side validation of movement; local records alone are not sufficient.
 
 ## Controls
 
