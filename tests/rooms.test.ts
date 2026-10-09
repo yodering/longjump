@@ -88,6 +88,26 @@ test('Jump announcements carry the server-assigned name and are rate limited', a
   assert.equal(a.inbox.filter(m => m.t === 'jump').length, 3, 'four per second in total');
 });
 
+test('Jumps under 240 units stay private to the jumper', async () => {
+  const s = start(), a = await s.connect({ key: await s.claim('Alpha'), create: true }), { room } = await a.next('welcome');
+  const b = await s.connect({ key: await s.claim('Bravo'), room }); await b.next('welcome');
+  const jump = { t: 'jump', distance: 239.99, sync: 80, pre: 250, max: 270, height: 55, width: 20, strafes: 6, ticks: 98, overlap: 0, deadAir: 1, edge: 3.2, tick: 128, auto: false };
+  b.send(jump); b.send({ ...jump, distance: 240 });
+  assert.equal((await a.next('jump')).distance, 240);
+  await new Promise(resolve => setTimeout(resolve, 100));
+  assert.equal(a.inbox.filter(m => m.t === 'jump').length, 0);
+});
+
+test('Spectating players are flagged in relayed poses', async () => {
+  const s = start(), a = await s.connect({ key: await s.claim('Alpha'), create: true }), { room } = await a.next('welcome');
+  const b = await s.connect({ key: await s.claim('Bravo'), room }); await b.next('welcome');
+  const pose = { t: 'pose', p: [1, 2, 3], v: [0, 0, 0], yaw: 0, pitch: 0, g: true, d: 0, m: 'ct' };
+  b.send({ ...pose, s: true });
+  assert.equal((await a.next('poses')).players[0].s, true);
+  b.send({ ...pose, p: [4, 2, 3] });
+  assert.equal((await a.next('poses')).players[0].s, undefined);
+});
+
 test('Rooms refuse missing names, stale game versions, unknown codes and a ninth player', async () => {
   const s = start();
   const nameless = await s.connect({ key: 'f'.repeat(64), create: true });

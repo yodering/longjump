@@ -3,7 +3,7 @@ import { normalizeSettings, viewPresets, type Settings, type ViewSettings } from
 
 const commands: Record<string, Action> = { '+forward': 'forward', '+back': 'back', '+moveleft': 'left', '+moveright': 'right',
   '+jump': 'jump', '+duck': 'duck', '+speed': 'walk', '+lookatweapon': 'inspect', '+attack': 'light', '+attack2': 'heavy',
-  vnl_reset: 'reset', vnl_save: 'save', vnl_return: 'return', vnl_stats: 'stats', vnl_hints: 'stats' };
+  vnl_reset: 'reset', vnl_save: 'save', vnl_return: 'return', vnl_stats: 'stats', vnl_hints: 'stats', vnl_spectate: 'spectate' };
 const sourceKeys: Record<string, string> = { space: 'Space', ctrl: 'ControlLeft', shift: 'ShiftLeft', alt: 'AltLeft',
   rctrl: 'ControlRight', rshift: 'ShiftRight', ralt: 'AltRight', enter: 'Enter', tab: 'Tab', backspace: 'Backspace',
   del: 'Delete', ins: 'Insert', home: 'Home', end: 'End', pgup: 'PageUp', pgdn: 'PageDown', capslock: 'CapsLock',

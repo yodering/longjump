@@ -4,17 +4,23 @@ import { readFileSync, existsSync } from 'node:fs';
 import { Movement, RULES, speed, type Box } from '../src/physics.ts';
 import { MapLighting } from '../src/map-lighting.ts';
 const idle = { forward: 0, side: 0, jump: false, duck: false, walk: false, yaw: Math.PI / 2 };
-for (const [name, minimum, maximum] of [['longjump_source_go', 225, 260], ['kz_longjumps_go', 240, 249]] as const) {
+const range = (minimum: number, maximum: number) => Array.from({ length: maximum - minimum + 1 }, (_, i) => minimum + i);
+// kz_baxter's LJ room: 210 and 217–310, with second lanes for some distances and a few longer steps above 295.
+const baxter = [210, ...range(217, 220), ...range(225, 239), 240, 240, ...range(241, 255), 256, ...range(257, 259), 260, 260, ...range(261, 269), 270, 270,
+  ...range(271, 284), 285, 285, ...range(286, 289), 290, 290, ...range(291, 294), 295, 295, 300, 300, 305, 305, 308, 310, 310];
+type Lane = { gap: number; startId: string; endId: string; spawn: { x: number; y: number; z: number }; yaw: number };
+// Lanes run along +x (yaw 90°) or +y (yaw 0).
+const along = (lane: Lane) => lane.yaw === 0 ? 'y' as const : 'x' as const;
+for (const [name, gaps] of [['longjump_source_go', range(225, 260)], ['kz_longjumps_go', range(240, 249)], ['kz_baxter', baxter]] as const) {
   const path = new URL(`../public/maps/${name}/`, import.meta.url);
   const data = JSON.parse(readFileSync(new URL('map.json', path), 'utf8'));
   test(`${name}: every fixed gap comes from original brush bounds and every spawn is clear`, () => {
-    assert.equal(data.lanes.length, maximum - minimum + 1);
-    assert.deepEqual(data.lanes.map((l: { gap: number }) => l.gap), Array.from({ length: maximum - minimum + 1 }, (_, i) => minimum + i));
+    assert.deepEqual(data.lanes.map((l: { gap: number }) => l.gap), gaps);
     const m = new Movement(); m.boxes = data.boxes;
-    for (const lane of data.lanes) {
+    for (const lane of data.lanes as Lane[]) {
       const start = m.boxes.find((b: Box) => b.id === lane.startId)!;
       const end = m.boxes.find((b: Box) => b.id === lane.endId)!;
-      assert.equal(end.min.x - start.max.x, lane.gap);
+      assert.equal(end.min[along(lane)] - start.max[along(lane)], lane.gap);
       assert.equal(end.max.z, start.max.z);
       m.reset(lane.spawn); assert.equal(m.support()?.id, lane.startId);
       assert.equal(m.overlaps(m.position, RULES.height), false);
@@ -70,12 +76,14 @@ for (const [name, minimum, maximum] of [['longjump_source_go', 225, 260], ['kz_l
     }
   });
   for (const tickRate of [64, 128] as const) test(`${name}: ${tickRate}t manual-input strafes clear the original 246 block`, () => {
-    const lane = data.lanes.find((l: { gap: number }) => l.gap === 246);
+    const lane = data.lanes.find((l: Lane) => l.gap === 246) as Lane, axis = along(lane);
     const m = new Movement(); m.boxes = data.boxes; m.tickRate = tickRate;
     const start = m.boxes.find((b: Box) => b.id === lane.startId)!;
-    m.reset({ ...lane.spawn, x: start.max.x + 14 }); m.velocity.x = 250;
+    m.reset({ ...lane.spawn, [axis]: start.max[axis] + 14 }); m.velocity[axis] = 250;
+    // Drifting to the left of the run (+y along x, -x along y) calls for the right strafe key.
+    const left = (v: { x: number; y: number }) => axis === 'x' ? v.y : -v.x;
     for (let t = 0; t < tickRate * 2 && !m.result; t++) {
-      const side = m.velocity.y > 0 ? 1 : -1;
+      const side = left(m.velocity) > 0 ? 1 : -1;
       const projection = Math.max(0, 30 - 12 * 250 / tickRate * m.surfaceFriction);
       const yaw = Math.atan2(m.velocity.x, m.velocity.y) + side * Math.acos(projection / speed(m.velocity)) - side * Math.PI / 2;
       m.step({ ...idle, side, yaw, jump: t === 0, duck: t > tickRate / 2 });
@@ -83,8 +91,8 @@ for (const [name, minimum, maximum] of [['longjump_source_go', 225, 260], ['kz_l
     assert.ok(m.result?.valid, `${m.result?.reason} at ${JSON.stringify(m.position)}`);
     assert.ok(m.result.distance >= 246); assert.equal(m.platform, lane.endId);
     const straight = new Movement(); straight.boxes = data.boxes; straight.tickRate = tickRate;
-    straight.reset({ ...lane.spawn, x: start.max.x + 14 }); straight.velocity.x = 250;
-    for (let t = 0; t < tickRate * 2; t++) straight.step({ ...idle, forward: 1, jump: t === 0, duck: t > tickRate / 2 });
+    straight.reset({ ...lane.spawn, [axis]: start.max[axis] + 14 }); straight.velocity[axis] = 250;
+    for (let t = 0; t < tickRate * 2; t++) straight.step({ ...idle, forward: 1, yaw: lane.yaw, jump: t === 0, duck: t > tickRate / 2 });
     assert.equal(straight.result?.valid, false);
     assert.equal(straight.result?.landed, false);
     assert.ok(straight.grounded);

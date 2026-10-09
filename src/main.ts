@@ -14,7 +14,7 @@ import { JumpRecorder } from './replay';
 import { Identity } from './identity';
 import { RoomClient, type RoomJump } from './room';
 import { RoomPanel } from './room-panel';
-import { RemotePlayers } from './remote-players';
+import { RemotePlayers, type SpectatorView } from './remote-players';
 import { escapeHtml } from './html';
 import { fingerprint, readCheckpoints, checkpointForMap, type SavedPosition } from './backup';
 import { normalizeSettings } from './settings';
@@ -102,6 +102,8 @@ app.innerHTML = `
     </div>
   <div id="hud" hidden>
     <div id="crosshair" class="cs-crosshair"><i></i><i></i><i></i><i></i><b></b></div>
+    <div id="crosshair-speed" class="crosshair-speed" aria-hidden="true"><span id="crosshair-speed-now">0.00</span><span id="crosshair-speed-pre"></span></div>
+    <div id="spectate-banner" class="spectate-banner" hidden></div>
     <div class="info-panel" aria-live="off"><div>Speed: <b id="speed">0</b> <span id="takeoff-speed"></span></div><div>Keys: <span id="keys">_ _ _ _ _ _</span></div><div id="hud-pb" class="hud-pb" hidden></div></div>
     <div id="kz-chat" class="kz-chat" aria-live="polite"></div>
     <div class="play-controls"><span><kbd data-bind-label="reset"></kbd> RESET</span><span><kbd data-bind-label="save"></kbd> SAVE</span><span><kbd data-bind-label="return"></kbd> RETURN</span><button id="fullscreen" aria-label="Toggle fullscreen"><i data-lucide="maximize" aria-hidden="true"></i></button></div>
@@ -116,6 +118,7 @@ app.innerHTML = `
       <ul class="credits-list">
         <li><a href="https://steamcommunity.com/sharedfiles/filedetails/?id=249758765" target="_blank" rel="noreferrer">longjump_source_go</a><p>Original by AZiRES. CS:GO port by badgec / kernel.</p></li>
         <li><a href="https://steamcommunity.com/sharedfiles/filedetails/?id=249444895" target="_blank" rel="noreferrer">kz_longjumps_go</a><p>Draw (CS 1.6), THEBUGUSER (Source), badgec / kernel (CS:GO).</p></li>
+        <li><a href="https://steamcommunity.com/sharedfiles/filedetails/?id=1366794864" target="_blank" rel="noreferrer">kz_baxter</a><p>Samuel. LJ room by xq. Textures by TopHATTwaffle &amp; Saspatoon.</p></li>
       </ul>
     </section>
     <section class="about-credits" aria-labelledby="movement-credits-title">
@@ -150,6 +153,8 @@ const playGuard = new PlayGuard(window, (navigator as Navigator & { keyboard?: {
 const controls = commands.live;
 const recorder = new JumpRecorder();
 let yaw = 0, pitch = 0, locked = false, started = false, settingsPreview = false, jumpUsedLJ = false;
+// The room player being watched in first person; local movement is paused meanwhile.
+let spectating: string | null = null;
 let checkpoint: Position | null = null;
 let savedPositions: SavedPosition[] = [];
 try { savedPositions = readCheckpoints(read<unknown>('vnl-checkpoints', [])); } catch { /* Discard malformed saved positions. */ }
@@ -164,7 +169,8 @@ function applyPreferences() {
   document.documentElement.dataset.mode = settings.appearance;
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', getComputedStyle(document.documentElement).getPropertyValue('--neutral-1').trim());
   if (plotPath.length) drawPath(plotPath, plotLanded);
-  controls.bindings = settings.bindings; controls.clear(); commands.reset(performance.now(), yaw);
+  controls.bindings = settings.bindings; controls.nullBind = settings.nullBind; controls.clear(); commands.reset(performance.now(), yaw);
+  remote.group.visible = settings.showPlayers; $('crosshair-speed').hidden = !settings.crosshairSpeed; roomPanel?.render();
   world.configureDisplay(settings); world.viewmodel.configure(settings.view);
   if (world.viewmodel.team !== settings.team) void world.viewmodel.setTeam(settings.team);
   sounds.enabled = settings.sound; sounds.volume = settings.volume;
@@ -186,7 +192,11 @@ const remote = new RemotePlayers(); world.scene.add(remote.group);
 // Assigned below; the panel can trigger room events while it is being created (invite links).
 let roomPanel: RoomPanel | undefined;
 const room = new RoomClient(identity, import.meta.env.VITE_PHYSICS_VERSION ?? '', {
-  changed: () => { remote.sync(room.players, room.you); roomPanel?.render(); if (!room.code) remote.clear(); },
+  changed: () => {
+    remote.sync(room.players, room.you); if (!room.code) remote.clear();
+    if (spectating && (!room.code || !room.players.has(spectating))) spectate(null);
+    roomPanel?.render();
+  },
   poses: (at, players) => remote.receive(at, players, performance.now()),
   joined: name => feedLine(`<p><span class="kz-tag">${escapeHtml(name)}</span> joined the room</p>`),
   left: name => feedLine(`<p><span class="kz-tag">${escapeHtml(name)}</span> left the room</p>`),
@@ -199,7 +209,12 @@ const room = new RoomClient(identity, import.meta.env.VITE_PHYSICS_VERSION ?? ''
   },
   error: message => { roomPanel?.error(message); toast(message); },
 });
-roomPanel = new RoomPanel($('room-panel'), identity, room, () => settings.mapId);
+roomPanel = new RoomPanel($('room-panel'), identity, room, () => settings.mapId, {
+  showPlayers: () => settings.showPlayers,
+  setShowPlayers: show => { settings.showPlayers = show; applyPreferences(); },
+  spectating: () => spectating,
+  spectate: id => { spectate(id); if (id) void enter(); },
+});
 applyPreferences();
 function updateStatsPanel() {
   $('jump-panel').hidden = !settings.jumpStats;
@@ -347,12 +362,35 @@ $('start').addEventListener('click', enter);
 world.renderer.domElement.addEventListener('click', () => { if (started && !locked && $('about').hasAttribute('open') === false) void enter(); });
 document.addEventListener('pointerlockchange', () => setLocked(document.pointerLockElement === world.renderer.domElement));
 document.addEventListener('pointerlockerror', () => { $('start-note').textContent = 'Focus a desktop browser window, then click Play again.'; });
-document.addEventListener('mousemove', event => { if (locked) {
+document.addEventListener('mousemove', event => { if (locked && !spectating) {
   yaw += event.movementX * settings.sensitivity * settings.mouseYaw * Math.PI / 180;
   pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, pitch - event.movementY * settings.sensitivity * settings.mousePitch * (settings.invertY ? -1 : 1) * Math.PI / 180));
   commands.look(yaw, event.timeStamp);
 } });
+const bindLabel = (action: Action) => settings.bindings[action][0] ? tokenLabel(settings.bindings[action][0]) : '—';
+function spectate(id: string | null) {
+  spectating = id; remote.spectating = id;
+  // Movement stays paused where it was and resumes from there; queued input is dropped either way.
+  controls.clear(); lastTime = performance.now(); commands.reset(lastTime, yaw); movement.jumpHeld = false;
+  const name = id ? room.players.get(id) ?? '' : '';
+  $('spectate-banner').hidden = !id;
+  $('spectate-banner').innerHTML = id ? `Spectating <b>${escapeHtml(name)}</b><kbd>${escapeHtml(bindLabel('light'))}</kbd>Next<kbd>${escapeHtml(bindLabel('heavy'))}</kbd>Previous<kbd>${escapeHtml(bindLabel('spectate'))}</kbd>Stop` : '';
+  roomPanel?.render();
+}
+function cycleSpectate(step: 1 | -1) {
+  const targets = remote.targets(), index = spectating ? targets.indexOf(spectating) : -1;
+  if (!targets.length) { if (spectating) spectate(null); toast(room.connected ? 'No one to spectate yet' : 'Join a room to spectate'); return; }
+  spectate(targets[index < 0 ? (step > 0 ? 0 : targets.length - 1) : (index + step + targets.length) % targets.length]);
+}
 function runAction(action: Action | undefined) {
+  if (spectating) {
+    if (action === 'spectate') spectate(null);
+    if (action === 'light') cycleSpectate(1);
+    if (action === 'heavy') cycleSpectate(-1);
+    if (action === 'stats') toggleStatsPanel();
+    return;
+  }
+  if (action === 'spectate') cycleSpectate(1);
   if (action === 'reset') { reset(); sounds.play('checkpoint'); }
   if (action === 'save') {
     if (movement.grounded && !movement.ducked && movement.support()) {
@@ -454,9 +492,14 @@ historyPanel = new HistoryPanel($('history-browser'), archive, count => { $('his
 });
 void archive.bests().then(saved => { records = readBests([...records, ...saved]); writeRecords(); updateSession(); }).catch(() => {});
 updateSession(); createIcons({ icons: { ArrowLeftRight }, attrs: { 'aria-hidden': 'true' } });
-function updateHUD() {
-  const sp = speed(movement.velocity); $('speed').textContent = String(Math.round(sp));
-  $('takeoff-speed').textContent = movement.jump ? `(${Math.round(movement.jump.preSpeed)})` : '';
+function updateHUD(target: SpectatorView | null) {
+  const sp = speed(target ? target.velocity : movement.velocity), takeoff = target ? target.takeoff : movement.jump?.preSpeed ?? null;
+  $('speed').textContent = String(Math.round(sp));
+  $('takeoff-speed').textContent = takeoff === null ? '' : `(${Math.round(takeoff)})`;
+  $('crosshair-speed-now').textContent = sp.toFixed(2);
+  $('crosshair-speed-pre').textContent = takeoff === null ? '' : `(${takeoff.toFixed(2)})`;
+  // A watched player's keys are not sent, only their movement.
+  if (target) { $('keys').textContent = '— — — — — —'; return; }
   const input = controls.snapshot(yaw);
   $('keys').textContent = [input.forward > 0 ? 'W' : '_', input.side < 0 || input.overlap ? 'A' : '_', input.forward < 0 ? 'S' : '_',
     input.side > 0 || input.overlap ? 'D' : '_', input.duck ? 'C' : '_', input.jump || movement.jumpHeld ? 'J' : '_'].join(' ');
@@ -471,7 +514,19 @@ function frame(_frameTimestamp: number) {
   // Sample the current clock so those inputs do not wait for another draw.
   const now = performance.now();
   const dt = Math.min((now - lastTime) / 1000, 0.05); lastTime = now;
-  if (locked) {
+  if (spectating) {
+    remote.update(now, world.camera, lightAt);
+    // A watched player who left or started spectating passes the view to the next one.
+    if (!remote.targets().includes(spectating) && remote.view(spectating)) cycleSpectate(1);
+  }
+  const target = spectating ? remote.view(spectating) : null;
+  if (spectating) {
+    commands.reset(now, yaw);
+    // Until the watched player's first pose arrives, the paused local view stays up.
+    if (target) world.play(target.eye, target.yaw, target.pitch, dt, { punch: 0, speed: speed(target.velocity), grounded: target.grounded, show: false, leftHand: settings.leftHand });
+    else world.play(movement.eye(1), yaw, pitch, dt, view());
+    if (locked && target) updateHUD(target);
+  } else if (locked) {
     commands.advance(now, movement.tickRate, input => {
       if (movement.grounded && !movement.jump) jumpBlock = blockAt(mapLanes(classic), movement.support()?.id ?? '')?.gap ?? 0;
       if (movement.grounded && !movement.jump) jumpUsedLJ = false;
@@ -482,10 +537,10 @@ function frame(_frameTimestamp: number) {
     });
     remote.update(now, world.camera, lightAt);
     world.play(movement.renderEye(commands.alpha, commands.preview(now)), yaw, pitch, dt, view());
-    updateHUD();
+    updateHUD(null);
   } else if (!started && !settingsPreview) { remote.update(now, world.camera, lightAt); world.preview(now / 1000); }
   else { remote.update(now, world.camera, lightAt); world.play(movement.eye(1), yaw, pitch, dt, view()); }
-  room.pose(now, movement.position, movement.velocity, yaw, pitch, movement.grounded, movement.duckAmount, settings.team);
+  room.pose(now, movement.position, movement.velocity, yaw, pitch, movement.grounded, movement.duckAmount, settings.team, !!spectating);
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

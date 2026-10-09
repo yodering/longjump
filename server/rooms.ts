@@ -7,13 +7,15 @@ import type { Database } from 'bun:sqlite';
 // Announcements are client-reported; only replay-verified jumps reach the leaderboard.
 export const ROOM_SIZE = 8;
 export const SNAPSHOT_MS = 50;
+// Matches the client: shorter jumps are not announced to the room.
+export const ANNOUNCE_DISTANCE = 240;
 const EMPTY_ROOM_MS = 10 * 60_000;
 const MAX_BUFFERED = 64 * 1024;
 const CODE_ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
 const POSITION_LIMIT = 65_536, SPEED_LIMIT = 4_000;
 
 export type RoomSocket = ServerWebSocket<{ address: string; member?: Member }>;
-type Pose = { p: [number, number, number]; v: [number, number, number]; yaw: number; pitch: number; g: boolean; d: number; r: boolean; m: 'ct' | 't' };
+type Pose = { p: [number, number, number]; v: [number, number, number]; yaw: number; pitch: number; g: boolean; d: number; r: boolean; m: 'ct' | 't'; s?: true };
 type Member = { id: string; name: string; room: Room; ws: RoomSocket; pose: Pose | null; dirty: boolean; poses: number[]; jumps: number[] };
 type Room = { code: string; mapId: string; members: Map<string, Member>; emptySince: number | null };
 export type RoomsConfig = { db: Database; physicsVersion: string; mapIds: string[]; now?: () => number };
@@ -81,8 +83,9 @@ export function createRooms(config: RoomsConfig) {
       || typeof input.g !== 'boolean' || !finite(input.d, 1) || input.d < 0) return;
     // A reset stays marked until the next snapshot carries it, so remote views snap instead of sliding.
     const reset = input.r === true || (member.dirty && member.pose?.r === true);
-    // m picks the CT or T player model, following the sender's knife setting.
-    member.pose = { p: input.p, v: input.v, yaw: input.yaw, pitch: input.pitch, g: input.g, d: input.d, r: reset, m: input.m === 't' ? 't' : 'ct' };
+    // m picks the CT or T player model, following the sender's knife setting; s hides a spectating player.
+    member.pose = { p: input.p, v: input.v, yaw: input.yaw, pitch: input.pitch, g: input.g, d: input.d, r: reset, m: input.m === 't' ? 't' : 'ct',
+      ...(input.s === true ? { s: true as const } : {}) };
     member.dirty = true;
   }
 
@@ -90,7 +93,8 @@ export function createRooms(config: RoomsConfig) {
     if (!within(member.jumps, now(), 4)) return;
     const numbers = ['distance', 'sync', 'pre', 'max', 'height', 'width'] as const, counts = ['strafes', 'ticks', 'overlap', 'deadAir'] as const;
     if (!numbers.every(k => finite(input[k], 10_000)) || !counts.every(k => Number.isInteger(input[k]) && (input[k] as number) >= 0 && (input[k] as number) < 10_000)
-      || (input.edge !== null && !finite(input.edge, 1_000)) || (input.tick !== 64 && input.tick !== 128) || typeof input.auto !== 'boolean') return;
+      || (input.edge !== null && !finite(input.edge, 1_000)) || (input.tick !== 64 && input.tick !== 128) || typeof input.auto !== 'boolean'
+      || (input.distance as number) < ANNOUNCE_DISTANCE) return;
     const announced = { t: 'jump', id: member.id, name: member.name, tick: input.tick, auto: input.auto, edge: input.edge,
       ...Object.fromEntries([...numbers, ...counts].map(k => [k, input[k]])) };
     broadcast(member.room, announced, member);

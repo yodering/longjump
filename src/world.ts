@@ -52,9 +52,41 @@ async function skybox(base: string, faces: Record<keyof typeof SKY_FACES, string
   group.scale.setScalar(16);
   return group;
 }
+// Source angles (pitch, yaw, roll in degrees) to three.js right / up / forward vectors (AngleVectors).
+function angleVectors([pitch, yaw, roll]: number[]) {
+  const [sp, cp, sy, cy, sr, cr] = [pitch, pitch, yaw, yaw, roll, roll].map((a, i) => (i % 2 ? Math.cos : Math.sin)(a * Math.PI / 180));
+  const forward = { x: cp * cy, y: cp * sy, z: -sp };
+  const right = { x: -sr * sp * cy + cr * sy, y: -sr * sp * sy - cr * cy, z: -sr * cp };
+  const up = { x: cr * sp * cy + sr * sy, y: cr * sp * sy - sr * cy, z: cr * cp };
+  return { forward: toThree(forward), right: toThree(right), up: toThree(up) };
+}
+// point_worldtext: unlit text whose bottom-left corner is the origin, running along the entity's right
+// vector and read looking along its forward vector, textsize units tall.
+function worldText(labels: NonNullable<ImportedMap['worldText']>) {
+  const group = new THREE.Group(), textures = new Map<string, { texture: THREE.CanvasTexture; aspect: number }>();
+  const font = `600 56px ${getComputedStyle(document.documentElement).getPropertyValue('--font-ui') || 'sans-serif'}`;
+  for (const label of labels) {
+    const key = `${label.text}|${label.color}`;
+    if (!textures.has(key)) {
+      const canvas = document.createElement('canvas'), c = canvas.getContext('2d')!;
+      c.font = font; canvas.width = Math.ceil(c.measureText(label.text).width) + 8; canvas.height = 64;
+      c.font = font; c.textBaseline = 'alphabetic'; c.fillStyle = `rgb(${label.color.join(',')})`; c.fillText(label.text, 4, 52);
+      const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace; texture.anisotropy = 8;
+      textures.set(key, { texture, aspect: canvas.width / canvas.height });
+    }
+    const { texture, aspect } = textures.get(key)!, height = label.size * 64 / 56;
+    const geometry = new THREE.PlaneGeometry(height * aspect, height).translate(height * aspect / 2, height / 2 - label.size * 12 / 56, 0);
+    const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false, toneMapped: false }));
+    const { forward, right, up } = angleVectors(label.angles);
+    mesh.matrixAutoUpdate = false;
+    mesh.matrix.makeBasis(right, up, forward.clone().negate()).setPosition(toThree({ x: label.origin[0], y: label.origin[1], z: label.origin[2] }));
+    mesh.renderOrder = 2; group.add(mesh);
+  }
+  return group;
+}
 export class World {
   scene = new THREE.Scene();
-  camera = new THREE.PerspectiveCamera(90, innerWidth / innerHeight, 0.5, 5000);
+  camera = new THREE.PerspectiveCamera(90, innerWidth / innerHeight, 0.5, 12000);
   renderer: THREE.WebGLRenderer;
   room = new THREE.Group(); platforms = new THREE.Group(); trail = new THREE.Group(); imported = new THREE.Group();
   classic: ImportedMap | null = null;
@@ -201,6 +233,7 @@ export class World {
           geometry.setAttribute('uv1', new THREE.Float32BufferAttribute(mesh.uv2, 2));
           const object = new THREE.Mesh(geometry, decalMaps[mesh.material]); object.renderOrder = 1; group.add(object);
         }
+        if (data.worldText?.length) group.add(worldText(data.worldText));
       } catch (error) { for (const m of materials.values()) { m.uniforms.map.value?.dispose(); m.uniforms.normalMap.value?.dispose(); m.dispose(); } lightmap?.dispose(); throw error; }
       this.lightmap?.dispose(); this.lightmap = lightmap;
       const sky = data.sky ? await skybox(`${import.meta.env.BASE_URL}maps/${id}`, data.sky.faces).catch(error => { console.warn('Skybox failed to load', error); return null; }) : null;

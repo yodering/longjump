@@ -75,3 +75,20 @@ for (const tickRate of [64, 128]) {
     assert.equal(movement.grounded, false);
   });
 }
+test('Null binds let the newest strafe key win and resume the held one on release', () => {
+  const controls = new Controls(normalizeBindings(null)); controls.nullBind = true;
+  controls.down('KeyD'); assert.equal(controls.tick(0).side, 0.5); assert.equal(controls.tick(0).side, 1);
+  controls.down('KeyA');
+  // The same tick sees D released and A pressed, as the alias script's -moveright; +moveleft.
+  const swap = controls.tick(0); assert.equal(swap.side, -0.5); assert.equal(swap.overlap, false);
+  assert.equal(controls.tick(0).side, -1);
+  controls.up('KeyA'); assert.equal(controls.tick(0).side, 0.5); assert.equal(controls.tick(0).side, 1);
+  // Releasing the overridden key does nothing; the active one keeps moving.
+  controls.down('KeyA'); controls.tick(0); controls.up('KeyD'); assert.equal(controls.tick(0).side, -1);
+  assert.equal(controls.fork().nullBind, true);
+});
+test('Without null binds, both strafe keys cancel out as overlap', () => {
+  const controls = new Controls(normalizeBindings(null));
+  controls.down('KeyD'); controls.down('KeyA'); controls.tick(0);
+  const both = controls.tick(0); assert.equal(both.side, 0); assert.equal(both.overlap, true);
+});

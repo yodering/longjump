@@ -2,20 +2,28 @@ import { ApiError, type Identity } from './identity';
 import { escapeHtml, nameForm } from './html';
 import { ROOM_SIZE, type RoomClient } from './room';
 
+type Viewing = { showPlayers(): boolean; setShowPlayers(show: boolean): void; spectating(): string | null; spectate(id: string | null): void };
+
 // Practice-tab controls for private rooms: create, join from an invite link,
-// copy the link, see who's here and leave. Joining needs a name first.
+// copy the link, see who's here, spectate them, hide their models and leave. Joining needs a name first.
 export class RoomPanel {
   private invite: string | null = null;
   private naming = false;
   private message = '';
-  constructor(private root: HTMLElement, private identity: Identity, private room: RoomClient, private mapId: () => string) {
+  constructor(private root: HTMLElement, private identity: Identity, private room: RoomClient, private mapId: () => string, private viewing: Viewing) {
     root.innerHTML = `<div class="profile-row room-row"><span data-room="title"></span><div class="settings-buttons">
         <button class="settings-button" data-room="create">Create room</button>
         <button class="settings-button" data-room="copy">Copy invite link</button>
         <button class="settings-button" data-room="leave">Leave</button></div></div>
       ${nameForm('room', 'Join', 'Cancel')}
       <p class="setting-note" data-room="status" role="status" aria-live="polite"></p>
-      <ul class="room-players" data-room="players"></ul>`;
+      <ul class="room-players" data-room="players"></ul>
+      <label class="toggle-row room-options" data-room="options">Show other players <input type="checkbox" data-room="show"/></label>`;
+    this.element<HTMLInputElement>('show').addEventListener('change', () => this.viewing.setShowPlayers(this.element<HTMLInputElement>('show').checked));
+    this.element('players').addEventListener('click', event => {
+      const id = (event.target as HTMLElement).closest<HTMLElement>('[data-spectate]')?.dataset.spectate;
+      if (id !== undefined) this.viewing.spectate(id || null);
+    });
     this.element('create').addEventListener('click', () => { if (this.identity.player) this.room.start(this.mapId()); else { this.naming = true; this.render(); this.focusName(); } });
     this.element('leave').addEventListener('click', () => { this.room.leave(); this.setHash(null); this.message = ''; this.render(); });
     this.element('copy').addEventListener('click', () => void navigator.clipboard.writeText(this.room.inviteLink())
@@ -67,6 +75,10 @@ export class RoomPanel {
     const form = this.form(); form.hidden = !this.naming || !!this.identity.player;
     this.field(form, 'save').textContent = this.invite ? 'Join' : 'Create room';
     this.element('status').textContent = this.message; this.element('status').hidden = !this.message;
-    this.element('players').innerHTML = open ? [...r.players].map(([id, name]) => `<li>${escapeHtml(name)}${id === r.you ? ' <small>you</small>' : ''}</li>`).join('') : '';
+    const watching = this.viewing.spectating();
+    this.element('players').innerHTML = open ? [...r.players].map(([id, name]) => `<li>${escapeHtml(name)}${id === r.you ? ' <small>you</small>'
+      : id === watching ? ' <small>spectating</small> <button class="settings-button" data-spectate="">Stop</button>' : ` <button class="settings-button" data-spectate="${escapeHtml(id)}" aria-label="Spectate ${escapeHtml(name)}">Spectate</button>`}</li>`).join('') : '';
+    this.element('options').hidden = !open;
+    this.element<HTMLInputElement>('show').checked = this.viewing.showPlayers();
   }
 }

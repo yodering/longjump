@@ -2,6 +2,7 @@ import { createElement, Plus, X } from 'lucide';
 import { actions, assignBinding, normalizeBindings, tokenLabel, validToken, type Action } from './bindings.ts';
 import { normalizeSettings, resolutions, viewPresets, viewRanges, type Settings } from './settings.ts';
 import { exportConfig, importConfig, type ConfigReport } from './config.ts';
+import { decodeCrosshair, encodeCrosshair } from './crosshair-code.ts';
 
 const labels = { fov: 'Viewmodel FOV', x: 'Horizontal offset', y: 'Forward offset', z: 'Vertical offset',
   bobLower: 'Running lower', bobLat: 'Side bob', bobVert: 'Vertical bob', bobCycle: 'Bob cycle' };
@@ -18,6 +19,8 @@ export class SettingsPanel {
         <label class="toggle-row">Invert mouse Y <input id="invert-y" type="checkbox"/></label>
         <label class="toggle-row">Auto bunnyhop <input id="auto-bhop" type="checkbox" aria-describedby="auto-bhop-note"/></label>
         <p id="auto-bhop-note" class="setting-note">Hold jump to hop again on landing.</p>
+        <label class="toggle-row">Null binds <input id="null-bind" type="checkbox" aria-describedby="null-bind-note"/></label>
+        <p id="null-bind-note" class="setting-note">The newest strafe key wins: pressing A while holding D moves left, and releasing A resumes D.</p>
       </details>
       <details class="settings-section"><summary>Display</summary>
         <label class="toggle-row">Theme <select id="appearance"><option value="dark">Dark</option><option value="light">Light</option></select></label>
@@ -32,10 +35,17 @@ export class SettingsPanel {
       </details>
       <details class="settings-section"><summary>Crosshair</summary>
         <div class="crosshair-preview"><div class="cs-crosshair">${crosshairMarkup}</div></div>
+        <form id="crosshair-code-form" class="history-toolbar">
+          <input id="crosshair-code" aria-label="Crosshair share code" placeholder="CSGO-…" autocomplete="off" spellcheck="false" maxlength="40"/>
+          <button class="settings-button">Apply code</button>
+          <button type="button" id="crosshair-code-copy" class="settings-button">Copy code</button>
+        </form>
+        <p id="crosshair-code-status" role="status" class="setting-note">Paste a CS:GO crosshair code, or copy yours.</p>
         <label class="toggle-row">Color <input id="crosshair-color" type="color"/></label>
         ${[['size', 'Length', 0, 20, 0.5], ['gap', 'Gap', -5, 20, 0.5], ['thickness', 'Thickness', 0.5, 5, 0.5], ['alpha', 'Opacity', 0, 1, 0.05]].map(([id, label, min, max, step]) => `<label class="setting-range" for="crosshair-${id}">${label} <output id="crosshair-${id}-output"></output></label><input data-crosshair="${id}" id="crosshair-${id}" type="range" min="${min}" max="${max}" step="${step}"/>`).join('')}
         <label class="toggle-row">Center dot <input id="crosshair-dot" type="checkbox"/></label>
         <label class="toggle-row">Outline <input id="crosshair-outline" type="checkbox"/></label>
+        <label class="toggle-row">Speed under crosshair <input id="crosshair-speed" type="checkbox"/></label>
       </details>
       <details class="settings-section"><summary>Import / export</summary>
         <p class="setting-note">Import your CS:GO .cfg for supported movement binds, sensitivity, viewmodel and static crosshair settings. Other commands are listed and skipped.</p>
@@ -49,6 +59,19 @@ export class SettingsPanel {
     this.on('bindings-reset', 'click', () => { settings.bindings = normalizeBindings(null); this.capture = null; this.commit(); this.status('Default binds restored.'); });
     this.on('invert-y', 'change', () => { settings.invertY = this.input('invert-y').checked; this.commit(); });
     this.on('auto-bhop', 'change', () => { settings.autoBhop = this.input('auto-bhop').checked; this.commit(); });
+    this.on('null-bind', 'change', () => { settings.nullBind = this.input('null-bind').checked; this.commit(); });
+    this.on('crosshair-speed', 'change', () => { settings.crosshairSpeed = this.input('crosshair-speed').checked; this.commit(); });
+    this.on('crosshair-code-form', 'submit', () => {
+      const crosshair = decodeCrosshair(this.input('crosshair-code').value);
+      if (!crosshair) { this.crosshairStatus('That isn’t a CS:GO crosshair code.'); return; }
+      settings.crosshair = normalizeSettings({ crosshair }).crosshair; this.input('crosshair-code').value = ''; this.commit();
+      this.crosshairStatus('Crosshair applied.');
+    });
+    this.root.querySelector('#crosshair-code-form')!.addEventListener('submit', event => event.preventDefault());
+    this.on('crosshair-code-copy', 'click', () => {
+      const code = encodeCrosshair(settings.crosshair);
+      void navigator.clipboard.writeText(code).then(() => this.crosshairStatus(`Copied ${code}`), () => this.crosshairStatus(code));
+    });
     for (const id of ['resolution', 'scaling', 'appearance'] as const) this.on(id, 'change', () => {
       Object.assign(settings, { [id]: this.input(id).value }); this.commit();
     });
@@ -78,6 +101,7 @@ export class SettingsPanel {
   private input(id: string) { return this.root.querySelector<HTMLInputElement>(`#${id}`)!; }
   private on(id: string, event: string, fn: () => void) { this.root.querySelector(`#${id}`)!.addEventListener(event, fn); }
   private status(text: string) { this.root.querySelector('#binding-status')!.textContent = text; }
+  private crosshairStatus(text: string) { this.root.querySelector('#crosshair-code-status')!.textContent = text; }
   private commit() { this.changed(); this.render(); }
   cancelCapture() { if (this.capture) this.status('Binding cancelled.'); this.capture = null; this.renderBindings(); }
   captureToken(token: string) {
@@ -119,7 +143,8 @@ export class SettingsPanel {
   render() {
     this.renderBindings(); const s = this.settings;
     this.input('invert-y').checked = s.invertY;
-    this.input('auto-bhop').checked = s.autoBhop;
+    this.input('auto-bhop').checked = s.autoBhop; this.input('null-bind').checked = s.nullBind;
+    this.input('crosshair-speed').checked = s.crosshairSpeed;
     this.input('appearance').value = s.appearance; this.input('resolution').value = s.resolution; this.input('scaling').value = s.scaling;
     this.input('view-preset').value = Object.entries(viewPresets).find(([, v]) => Object.keys(viewRanges).every(k => v[k as keyof typeof v] === s.view[k as keyof typeof v]))?.[0] ?? 'custom';
     for (const key of Object.keys(viewRanges) as (keyof Settings['view'])[]) {
