@@ -1,10 +1,12 @@
 # Accounts, portable saves and multiplayer
 
-Draft, updated 9 October 2026. Recommended order: complete file backups, add optional account sync, then build shared practice rooms. Keep instant solo play available at every stage.
+Updated 9 October 2026. File backups are implemented. Next: finish optional account sync, then build shared practice rooms. Keep instant solo play available at every stage.
 
 ## What exists
 
-Attempts live in IndexedDB. The History menu pages and filters them and exports version-1 JSON containing attempts and personal bests. Preferences have a separate JSON export/import. History has no import yet, checkpoints last only for the current session, and clearing browser storage can erase progress. There is no account service or multiplayer server.
+Attempts live in IndexedDB. History imports and exports version-2 backups containing attempts, personal bests, preferences and persistent map-specific checkpoints. Version-1 imports remain supported. Imports preview new/duplicate counts and merge atomically; preferences and checkpoint restoration are separate choices. New attempts record rules and map versions. Clearing browser storage can still erase progress.
+
+A local Better Auth + Cloudflare D1 prototype now implements username signup, login, logout, rotating recovery keys and account-owned history/PB sync. Its migrations, payload limits, account quotas and shared rate limits are tested, including in Wrangler’s local runtime. The public site does not expose accounts yet. The account UI, durable upload queue, account-separated local caches, preferences/checkpoint cloud conflicts, account deletion/export and production deployment remain unfinished. There is no multiplayer server.
 
 Current best categories are map, tick rate and auto-hop setting; LJ bind usage is metadata. Preserve that behavior. Older attempts whose auto-hop setting was never recorded retain their unknown category.
 
@@ -32,9 +34,11 @@ Require a unique case-insensitive username, initially 3–20 ASCII letters, digi
 
 Recommend a recovery key after creation, with Copy and Download actions. Generate it on the server using cryptographic randomness, store only a hash, and never include it in logs or analytics. A username plus that key can reset the password, revoke existing sessions and replace the key. It is a full account credential, so show that purpose clearly. Without the password or recovery key, recovery is unavailable; there is no email reset. Key regeneration while signed in requires reauthentication. Saving the key need not block entry into practice.
 
-Use an established library for password hashing and sessions. Better Auth was the initial candidate and documents [Cloudflare D1 through a Kysely dialect](https://better-auth.com/docs/adapters/other-relational-databases), but its documented [username signup](https://better-auth.com/docs/plugins/username) still requires an email field. Do not treat that plugin as email-free signup out of the box. The implementation spike must prove the username-only flow, recovery, cookie sessions and D1 migrations together before selecting it. If an internal non-deliverable address is necessary for the library schema, generate it from the opaque account ID on the server and disable email login, email recovery and email-based account linking. Never ask the player to supply a fake email or expose an alternate signup route that bypasses the username rules. Prefer a library with native email-free accounts if that avoids extensive adapter work.
+The prototype uses Better Auth 1.7.7 for password hashing and cookie sessions, with its native D1 support. The [username plugin](https://better-auth.com/docs/plugins/username) still needs an email field internally. The server creates a unique non-deliverable address and exposes only a restricted username gateway; the browser cannot call raw email login, signup, recovery, linking or profile-update routes. Recovery uses the library’s password hasher and an atomic D1 batch to change the credential, revoke sessions and rotate the hashed key. The browser never supplies an email. Production uses secure HTTP-only cookies; local development uses loopback HTTP.
 
-Recommended initial service: a Cloudflare Worker for `/api/*` and D1 for account-owned saves, alongside the existing static game. Workers support [serving static assets with an API Worker](https://developers.cloudflare.com/workers/static-assets/binding/), and [D1](https://developers.cloudflare.com/d1/) supplies the SQL store. Add an explicit deployment config and tested database migrations; the repository currently relies on dashboard deployment configuration. Keep Bun for development, installation and tests. The Worker runs in Cloudflare's runtime.
+The prototype caps request bodies at 4 KiB for credentials and 256 KiB for sync, with at most 50 attempts per batch. Each account can store 100,000 attempts and 128 MiB of serialized attempt payloads. Database triggers enforce quotas and conflicting-ID checks in the same transaction as the save. These are provisional limits, not a cost forecast. The 10,000-attempt local backup test passes; realistic cloud bandwidth and production CPU usage still need measurements.
+
+Recommended initial service: a Cloudflare Worker for `/api/*` and D1 for account-owned saves, alongside the existing static game. Workers support [serving static assets with an API Worker](https://developers.cloudflare.com/workers/static-assets/binding/), and [D1](https://developers.cloudflare.com/d1/) supplies the SQL store. Add an explicit deployment config and tested database migrations; the static game currently relies on dashboard deployment configuration; `worker/wrangler.jsonc` is a separate, unpublished prototype config. Keep Bun for development, installation and tests. The Worker runs in Cloudflare's runtime.
 
 Suggested records:
 
@@ -90,6 +94,6 @@ A continuously simulated 128-tick room needs benchmarks before choosing its host
 
 Measure tick deadlines, correction size and bandwidth at full room capacity under latency and packet-loss tests. WebSockets use TCP, so delayed delivery can stall later commands; compare another transport only if measurements justify its extra complexity. Establish native game parity with the [movement capture plan](../movement/README.md#next-fidelity-work) before claiming CS:GO-equivalent competitive scores. Store replay evidence for verified attempts and define leaderboard eligibility independently of personal backups.
 
-## First implementation milestone
+## Current milestone
 
-Build backup import/export first. It solves transfer and recovery without an account service and gives cloud sync a tested merge format. Follow with optional account sync. Shared ghost rooms then add a useful multiplayer experience while server-authoritative competition remains a separate project.
+Backup import/export is complete and browser-tested. The account backend has passed local username, recovery, session, ownership, retry and quota checks. Next, build the account UI and durable sync behavior above, then publish the service with an actual D1 binding and production secret. Shared practice rooms and third-person models follow account sync.

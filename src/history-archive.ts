@@ -1,4 +1,5 @@
 import { readHistory, type Entry } from './history';
+import { equivalentAttempt } from './backup';
 
 export type SavedEntry = Entry & { id: string };
 export type HistoryQuery = { map: string; tick: string; status: string; order: 'at' | 'distance'; search: string; page: number };
@@ -22,8 +23,9 @@ export class HistoryArchive {
   private writes: Promise<void> = Promise.resolve();
   private memory: SavedEntry[];
   durable = true;
+  sourceId = crypto.randomUUID() as string;
   constructor(legacy: Entry[], factory: IDBFactory | undefined = globalThis.indexedDB, name = 'longjump-history') {
-    this.memory = readHistory(legacy).map((entry, index) => ({ ...entry, at: Number.isFinite(entry.at) ? entry.at : 0, id: `legacy-${index}` }));
+    this.memory = readHistory(legacy).map((entry, index) => ({ ...entry, at: Number.isFinite(entry.at) ? entry.at : 0, id: `legacy:${this.sourceId}:${index}` }));
     this.database = this.open(factory, name, this.memory.slice()).catch(() => { this.durable = false; return null; });
   }
   private async open(factory: IDBFactory | undefined, name: string, legacy: SavedEntry[]) {
@@ -43,6 +45,25 @@ export class HistoryArchive {
     db.onversionchange = () => db.close();
     const transaction = db.transaction(['attempts', 'meta'], 'readwrite');
     const done = completed(transaction);
+    const source = transaction.objectStore('meta').get('source-id');
+    source.onsuccess = () => {
+      this.sourceId = source.result ?? this.sourceId;
+      transaction.objectStore('meta').put(this.sourceId, 'source-id');
+      for (const entry of legacy) entry.id = `legacy:${this.sourceId}:${entry.id.split(':').at(-1)}`;
+      const migrated = transaction.objectStore('meta').get('portable-ids');
+      migrated.onsuccess = () => {
+        if (migrated.result) return;
+        const request = transaction.objectStore('attempts').getAll();
+        request.onsuccess = () => {
+          for (const entry of request.result as SavedEntry[]) if (/^legacy-\d+$/.test(entry.id)) {
+            transaction.objectStore('attempts').delete(entry.id);
+            entry.id = `legacy:${this.sourceId}:${entry.id.slice(7)}`;
+            transaction.objectStore('attempts').add(entry);
+          }
+          transaction.objectStore('meta').put(true, 'portable-ids');
+        };
+      };
+    };
     const marker = transaction.objectStore('meta').get('legacy-imported');
     marker.onsuccess = () => {
       if (marker.result) return;
@@ -53,6 +74,52 @@ export class HistoryArchive {
     return db;
   }
   async ready() { await this.database; return this.durable; }
+  async bests(): Promise<Entry[]> {
+    const db = await this.database; if (!db || !this.durable) return [];
+    const transaction = db.transaction('meta', 'readonly'), done = completed(transaction);
+    const request = transaction.objectStore('meta').get('bests');
+    await done; return readHistory(request.result);
+  }
+  async importPreview(entries: SavedEntry[]) {
+    const existing = new Map((await this.export()).map(entry => [entry.id, entry]));
+    let duplicates = 0;
+    for (const entry of entries) {
+      const old = existing.get(entry.id);
+      if (!old) continue;
+      if (!equivalentAttempt(old, entry)) throw new Error('An attempt ID conflicts with different saved data. Nothing was imported.');
+      duplicates++;
+    }
+    return { added: entries.length - duplicates, duplicates };
+  }
+  merge(entries: SavedEntry[], bests: Entry[]) {
+    const operation = this.writes.then(async () => {
+      const db = await this.database;
+      if (!db || !this.durable) throw new Error('Browser storage is unavailable. No backup was imported.');
+      const transaction = db.transaction(['attempts', 'meta'], 'readwrite');
+      const done = completed(transaction), store = transaction.objectStore('attempts');
+      let added = 0, conflict = false;
+      for (const entry of entries) {
+        const request = store.get(entry.id);
+        request.onsuccess = () => {
+          try {
+            if (!request.result) { store.add(entry); added++; }
+            else if (!equivalentAttempt(request.result, entry)) { conflict = true; transaction.abort(); }
+          } catch { conflict = true; transaction.abort(); }
+        };
+      }
+      transaction.objectStore('meta').put(bests, 'bests');
+      try { await done; } catch (error) {
+        if (conflict) throw new Error('An attempt ID conflicts with saved data. Nothing was imported.');
+        throw error;
+      }
+      const ids = new Set(this.memory.map(entry => entry.id));
+      for (const entry of entries) if (!ids.has(entry.id)) this.memory.push(entry);
+      return added;
+    });
+    // A rejected import must not poison later ordinary writes.
+    this.writes = operation.then(() => undefined, () => undefined);
+    return operation;
+  }
   append(entry: Entry) {
     const saved = { ...entry, id: crypto.randomUUID() };
     this.memory.unshift(saved);

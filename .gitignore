@@ -10,3 +10,5 @@ playwright-report/
 *.key
 __pycache__/
 *.pyc
+.wrangler/
+.dev.vars

@@ -9,6 +9,7 @@ import { soundTiers, jumpSound, type Sound } from './sound-tiers';
 import { readHistory, readBests, saveBest, sameCategory, type Entry } from './history';
 import { HistoryArchive } from './history-archive';
 import { HistoryPanel } from './history-panel';
+import { fingerprint, readCheckpoints, checkpointForMap, type SavedPosition } from './backup';
 import { normalizeSettings } from './settings';
 import { tokenLabel, type Action } from './bindings';
 import { Commands, PITCH_LIMIT, lockMouse } from './commands';
@@ -134,6 +135,9 @@ const playGuard = new PlayGuard(window, (navigator as Navigator & { keyboard?: {
 const controls = commands.live;
 let yaw = 0, pitch = 0, locked = false, started = false, settingsPreview = false, jumpUsedLJ = false;
 let checkpoint: Position | null = null;
+let savedPositions: SavedPosition[] = [];
+try { savedPositions = readCheckpoints(read<unknown>('vnl-checkpoints', [])); } catch { /* Discard malformed saved positions. */ }
+let mapContentVersion = '';
 let lastTime = performance.now(), fallTime = 0, toastTimeout = 0;
 let plotPath: Vec[] = [], plotLanded = false;
 const sounds = new Sounds(); sounds.enabled = settings.sound; sounds.volume = settings.volume;
@@ -199,9 +203,12 @@ async function changeMap(id: MapId) {
   $('start-note').textContent = 'Loading map…';
   const previous = settings.mapId;
   try {
-    const data = await loadMap(id); await world.buildImported(id, data);
+    const data = await loadMap(id);
+    const version = await fingerprint(JSON.stringify({ boxes: data.boxes, entry: data.entry, lanes: data.lanes }));
+    await world.buildImported(id, data);
     classic = data; settings.mapId = id; document.body.dataset.map = id; movement.boxes = data.boxes;
-    started = false; checkpoint = null;
+    started = false; mapContentVersion = version;
+    checkpoint = checkpointForMap(savedPositions, id, version, movement);
     const info = maps.find(m => m.id === id)!;
     document.querySelectorAll<HTMLButtonElement>('[data-map]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.map === id)));
     $('map-credit').innerHTML = `${info.credits}${info.workshop ? ` <a href="https://steamcommunity.com/sharedfiles/filedetails/?id=${info.workshop}" target="_blank" rel="noreferrer">WORKSHOP ↗</a>` : ''}`;
@@ -224,7 +231,8 @@ function chat(result: Result) {
 function showResult(result: Result) {
   engagement.jumpCompleted(result);
   const previousBest = best();
-  const entry: Entry = { ...result, path: result.path.map(p => ({ ...p })), at: Date.now(), mapId: settings.mapId, tickRate: settings.tickRate, gap: jumpBlock, ljBind: jumpUsedLJ, autoBhop: settings.autoBhop };
+  const entry: Entry = { ...result, path: result.path.map(p => ({ ...p })), at: Date.now(), mapId: settings.mapId, tickRate: settings.tickRate, gap: jumpBlock, ljBind: jumpUsedLJ, autoBhop: settings.autoBhop,
+    physicsVersion: import.meta.env.VITE_PHYSICS_VERSION, mapContentVersion };
   const updatedRecords = saveBest(records, entry);
   if (updatedRecords !== records) { records = updatedRecords; writeRecords(); }
   $('history-count').textContent = String(Number($('history-count').textContent) + 1);
@@ -295,7 +303,13 @@ document.addEventListener('mousemove', event => { if (locked) {
 function runAction(action: Action | undefined) {
   if (action === 'reset') { reset(); sounds.play('checkpoint'); }
   if (action === 'save') {
-    if (movement.grounded && !movement.ducked && movement.support()) { checkpoint = { position: { ...movement.position }, yaw, pitch }; sounds.play('checkpoint'); toast('Position saved'); }
+    if (movement.grounded && !movement.ducked && movement.support()) {
+      checkpoint = { position: { ...movement.position }, yaw, pitch };
+      savedPositions = [...savedPositions.filter(c => c.mapId !== settings.mapId), { ...checkpoint, mapId: settings.mapId, mapContentVersion }];
+      let persisted = true;
+      try { localStorage.setItem('vnl-checkpoints', JSON.stringify(savedPositions)); } catch { persisted = false; }
+      sounds.play('checkpoint'); toast(persisted ? 'Position saved' : 'Position saved for this session');
+    }
     else { sounds.play('error'); toast('Save a position while standing'); }
   }
   if (action === 'return') { if (checkpoint) { reset(); sounds.play('checkpoint'); } else { sounds.play('error'); toast('Save a position first'); } }
@@ -361,7 +375,32 @@ document.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach(button => but
 $('fullscreen').addEventListener('click', async () => { try { if (document.fullscreenElement) await document.exitFullscreen(); else await document.documentElement.requestFullscreen(); } catch { toast('Fullscreen is unavailable in this browser'); } });
 $('about-button').addEventListener('click', () => $<HTMLDialogElement>('about').showModal());
 $('close-about').addEventListener('click', () => $<HTMLDialogElement>('about').close());
-historyPanel = new HistoryPanel($('history-browser'), archive, count => { $('history-count').textContent = String(Math.max(Number($('history-count').textContent), count)); }, () => records);
+historyPanel = new HistoryPanel($('history-browser'), archive, count => { $('history-count').textContent = String(Math.max(Number($('history-count').textContent), count)); }, () => records, {
+  preferences: () => structuredClone(settings), checkpoints: () => structuredClone(savedPositions),
+  bests: imported => { records = readBests([...records, ...imported]); writeRecords(); updateSession(); },
+  apply: (preferences, checkpoints, display) => {
+    const notes: string[] = [];
+    if (preferences) {
+      const restored = { ...preferences, mapId: settings.mapId, tickRate: settings.tickRate,
+        resolution: display ? preferences.resolution : settings.resolution, scaling: display ? preferences.scaling : settings.scaling };
+      try {
+        localStorage.setItem('vnl-settings-before-backup', JSON.stringify(settings));
+        localStorage.setItem('vnl-settings', JSON.stringify(restored));
+        Object.assign(settings, restored); applyPreferences(); settingsPanel.render();
+      } catch { notes.push('Preferences could not be saved and were kept unchanged.'); }
+    }
+    if (checkpoints) {
+      const positions = [...savedPositions.filter(c => !checkpoints.some(incoming => incoming.mapId === c.mapId)), ...checkpoints];
+      try {
+        localStorage.setItem('vnl-checkpoints', JSON.stringify(positions)); savedPositions = positions;
+        checkpoint = checkpointForMap(savedPositions, settings.mapId, mapContentVersion, movement);
+        if (!checkpoint && positions.some(c => c.mapId === settings.mapId)) notes.push('The current map’s saved position is incompatible; its entrance will be used.');
+      } catch { notes.push('Saved positions could not be saved and were kept unchanged.'); }
+    }
+    return notes.join(' ');
+  },
+});
+void archive.bests().then(saved => { records = readBests([...records, ...saved]); writeRecords(); updateSession(); }).catch(() => {});
 updateSession(); createIcons({ icons: { ArrowLeftRight }, attrs: { 'aria-hidden': 'true' } });
 function updateHUD() {
   const sp = speed(movement.velocity); $('speed').textContent = String(Math.round(sp));
