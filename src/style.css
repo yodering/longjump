@@ -337,9 +337,9 @@ body.playing .jump-details { display: none; }
 .history-attempt summary small, .history-attempt summary>span:last-child, .history-detail p { color: var(--neutral-7); font: var(--weight-data-regular) var(--size-xs)/var(--line-xs) var(--font-data); letter-spacing: var(--letter-spacing-xs); }
 .history-detail { padding-bottom: var(--space-s); }
 .history-detail .jump-metrics { margin: 0; }
-.menu:has(#session-tab:not([hidden])) { width: min(600px, calc(100vw - 48px)); }
-.menu:has(#session-tab:not([hidden])) .description, .menu:has(#session-tab:not([hidden])) .current-map>span { display: none; }
-.menu:has(#session-tab:not([hidden])) .current-map { margin-bottom: var(--space-m); }
+.menu:has(#session-tab:not([hidden]), #leaderboard-tab:not([hidden])) { width: min(600px, calc(100vw - 48px)); }
+.menu:has(#session-tab:not([hidden]), #leaderboard-tab:not([hidden])) .description, .menu:has(#session-tab:not([hidden]), #leaderboard-tab:not([hidden])) .current-map>span { display: none; }
+.menu:has(#session-tab:not([hidden]), #leaderboard-tab:not([hidden])) .current-map { margin-bottom: var(--space-m); }
 .history-attempt summary::after { content: '⌄'; color: var(--neutral-7); }
 .history-attempt[open] summary::after { content: '⌃'; }
 .history-attempt summary>span:last-child { margin-left: auto; white-space: nowrap; }
@@ -349,15 +349,16 @@ body.playing .jump-details { display: none; }
   .history-filters { grid-template-columns: minmax(0, 1fr); }
 }
 
-.account-summary { display: flex; align-items: center; gap: var(--space-s); margin-block: var(--space-m); flex-wrap: wrap; }
-.account-summary > :first-child { font-weight: var(--weight-ui-heavy); }
-.account-summary .setting-note { flex: 1; margin: 0; }
-.account-details { border-block: var(--border-s) solid var(--neutral-4); padding-block: var(--space-m); margin-bottom: var(--space-m); }
-.account-form { display: grid; gap: var(--space-s); }
-.account-form label { display: grid; gap: var(--space-xs); }
-.account-form input, .account-details textarea { box-sizing: border-box; width: 100%; background: var(--neutral-2); color: var(--neutral-8); border: var(--border-s) solid var(--neutral-5); border-radius: var(--radius-s); padding: var(--space-s); font: var(--weight-ui-regular) var(--size-s)/var(--line-s) var(--font-ui); letter-spacing: var(--letter-spacing-s); }
-.account-details textarea { resize: vertical; min-height: 5em; overflow-wrap: anywhere; }
-.account-details details { margin-top: var(--space-m); }
-
-.account-password { display: flex; gap: var(--space-xs); }
-.account-password input { flex: 1; min-width: 0; }
+/* Leaderboard reuses History's toolbar and row rhythm. */
+.leaderboard-player { display: flex; align-items: center; justify-content: space-between; gap: var(--space-s); margin-bottom: var(--space-m); font: var(--weight-ui-regular) var(--size-xs)/var(--line-xs) var(--font-ui); letter-spacing: var(--letter-spacing-xs); color: var(--neutral-7); }
+.leaderboard-player b { color: var(--neutral-10); font-weight: var(--weight-ui-medium); overflow-wrap: anywhere; }
+#leaderboard-tab [data-board=status]:empty { display: none; }
+#leaderboard-tab [data-board=status] { margin: 0 0 var(--space-m); }
+.leaderboard { list-style: none; margin: 0; padding: 0; }
+.leaderboard-row { display: flex; align-items: center; gap: var(--space-s); padding-block: var(--space-s); box-shadow: inset 0 calc(-1 * var(--border-s)) var(--border-default-color); font: var(--weight-data-regular) var(--size-s)/var(--line-s) var(--font-data); letter-spacing: var(--letter-spacing-s); font-variant-numeric: tabular-nums; }
+.leaderboard-rank { min-width: 3ch; color: var(--neutral-7); }
+.leaderboard-name { display: flex; flex-direction: column; gap: var(--space-xxs); min-width: 0; flex: 1; color: var(--neutral-10); font-family: var(--font-ui); overflow-wrap: anywhere; }
+.leaderboard-score { display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-xxs); }
+.leaderboard-score b { font-weight: var(--weight-data-medium); color: var(--neutral-10); }
+.leaderboard-name small, .leaderboard-score small { color: var(--neutral-7); font: var(--weight-data-regular) var(--size-xs)/var(--line-xs) var(--font-data); letter-spacing: var(--letter-spacing-xs); }
+.leaderboard-row.own .leaderboard-name { font-weight: var(--weight-ui-medium); }

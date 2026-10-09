@@ -1,4 +1,4 @@
 {
-  "compilerOptions": { "target": "ES2022", "module": "ESNext", "lib": ["ES2022", "DOM"], "moduleResolution": "Bundler", "allowImportingTsExtensions": true, "noEmit": true, "strict": true, "skipLibCheck": true },
-  "include": ["*.ts", "../src/vite-env.d.ts"]
+  "compilerOptions": { "target": "ES2022", "module": "ESNext", "lib": ["ES2022"], "types": ["@cloudflare/workers-types"], "moduleResolution": "Bundler", "noEmit": true, "strict": true, "skipLibCheck": true },
+  "include": ["*.ts"]
 }

@@ -478,4 +478,23 @@ export class Movement {
       ducked: j.ducked };
     this.jump = null; this.onResult?.(this.result);
   }
+  // Everything step() reads, so a jump can be replayed from its takeoff tick.
+  snapshot(): MovementState {
+    return { position: clone(this.position), velocity: clone(this.velocity), grounded: this.grounded,
+      ducked: this.ducked, ducking: this.ducking, duckFlag: this.duckFlag, duckAmount: this.duckAmount, duckSpeed: this.duckSpeed,
+      stamina: this.stamina, jumpHeld: this.jumpHeld, fallVelocity: this.fallVelocity, surfaceFriction: this.surfaceFriction,
+      viewOffset: this.viewOffset, viewPunch: this.viewPunch, platform: this.platform, time: this.time,
+      lastDuckTime: Number.isFinite(this.lastDuckTime) ? this.lastDuckTime : null, rawDuck: this.rawDuck,
+      crouchSpot: { ...this.crouchSpot }, walkButton: this.walkButton, duckButton: this.duckButton };
+  }
+  restore(state: MovementState) {
+    Object.assign(this, { ...state, position: clone(state.position), velocity: clone(state.velocity), crouchSpot: { ...state.crouchSpot },
+      lastDuckTime: state.lastDuckTime ?? -Infinity, previousPosition: clone(state.position), previousViewOffset: state.viewOffset,
+      moveStart: clone(state.position), moveVelocity: clone(state.velocity), airMoved: false, maxSpeed: RULES.maxSpeed,
+      jump: null, result: null });
+  }
 }
+export type MovementState = { position: Vec; velocity: Vec; grounded: boolean; ducked: boolean; ducking: boolean; duckFlag: boolean;
+  duckAmount: number; duckSpeed: number; stamina: number; jumpHeld: boolean; fallVelocity: number; surfaceFriction: number;
+  viewOffset: number; viewPunch: number; platform: string; time: number; lastDuckTime: number | null; rawDuck: boolean;
+  crouchSpot: { x: number; y: number }; walkButton: boolean; duckButton: boolean };

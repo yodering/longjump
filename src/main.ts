@@ -9,7 +9,8 @@ import { soundTiers, jumpSound, type Sound } from './sound-tiers';
 import { readHistory, readBests, saveBest, sameCategory, type Entry } from './history';
 import { HistoryArchive } from './history-archive';
 import { HistoryPanel } from './history-panel';
-import { AccountPanel } from './account-panel';
+import { LeaderboardPanel } from './leaderboard-panel';
+import { JumpRecorder } from './replay';
 import { fingerprint, readCheckpoints, checkpointForMap, type SavedPosition } from './backup';
 import { normalizeSettings } from './settings';
 import { tokenLabel, type Action } from './bindings';
@@ -28,15 +29,12 @@ window.setInterval(() => engagement.flush(), 30_000);
 window.addEventListener('pagehide', () => engagement.setPlaying(false));
 document.documentElement.dataset.mode = settings.appearance;
 const legacyHistory = readHistory(read<unknown>('vnl-history', []));
-const guestArchive = new HistoryArchive(legacyHistory);
-let archive = guestArchive;
-let accounts: AccountPanel | undefined;
-let guestRecords: Entry[] = [];
+const archive = new HistoryArchive(legacyHistory);
 let historyPanel: HistoryPanel | undefined;
 let records = readBests(read<unknown>('vnl-bests', []), legacyHistory);
 const category = () => ({ mapId: settings.mapId, tickRate: settings.tickRate, autoBhop: settings.autoBhop });
 const best = () => records.find(record => sameCategory(record, category()))?.distance ?? 0;
-function writeRecords() { if (archive !== guestArchive) return; guestRecords = records; try { localStorage.setItem('vnl-bests', JSON.stringify(records)); } catch { /* Keep records in memory when storage is unavailable. */ } }
+function writeRecords() { try { localStorage.setItem('vnl-bests', JSON.stringify(records)); } catch { /* Keep records in memory when storage is unavailable. */ } }
 writeRecords();
 const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
@@ -50,7 +48,7 @@ app.innerHTML = `
       <h1>longjump</h1>
       <p class="description">cs:go long jump practice</p>
       <div class="current-map"><span>Map</span><strong id="menu-map">Loading…</strong></div>
-      <nav class="tabs" aria-label="Practice menu"><button data-tab="practice" class="active">Practice</button><button data-tab="maps">Maps</button><button data-tab="settings">Settings</button><button data-tab="session">History <span id="history-count">0</span></button></nav>
+      <nav class="tabs" aria-label="Practice menu"><button data-tab="practice" class="active">Practice</button><button data-tab="maps">Maps</button><button data-tab="settings">Settings</button><button data-tab="session">History <span id="history-count">0</span></button><button data-tab="leaderboard">Leaderboard</button></nav>
       <section id="practice-tab" class="tab-content">
         <div class="checkpoint-help"><span><kbd data-bind-label="save"></kbd> Save position</span><span><kbd data-bind-label="return"></kbd> Return</span><span><kbd data-bind-label="reset"></kbd> Reset</span></div>
         <div class="profile-row"><span>Vanilla</span><button id="tick-toggle">${settings.tickRate} tick <i data-lucide="arrow-left-right" aria-hidden="true"></i></button></div>
@@ -71,7 +69,8 @@ app.innerHTML = `
         <details class="sound-samples"><summary>Sound samples</summary><div>${soundTiers.map(t => `<button data-sample="${t.name}">${t.label} <small>${t.distance}+</small></button>`).join('')}<button data-sample="checkpoint">Checkpoint beep</button><button data-sample="error">Error beep</button></div><p class="setting-note">Practice long-jump thresholds.</p></details>
         <p id="mouse-scale-note" class="setting-note"></p>
       </section>
-      <section id="session-tab" class="tab-content" hidden><div id="personal-bests"></div><div id="account-controls"></div><div id="history-browser"></div></section>
+      <section id="session-tab" class="tab-content" hidden><div id="personal-bests"></div><div id="history-browser"></div></section>
+      <section id="leaderboard-tab" class="tab-content" hidden></section>
       <button id="start" class="start-button"><i data-lucide="play" aria-hidden="true"></i><span>Play</span></button>
       <div id="start-note" class="start-note">Click Play or press Esc to capture the mouse.</div>
     </div>
@@ -137,6 +136,7 @@ catch { $('start').setAttribute('disabled', ''); $('start-note').textContent = '
 const commands = new Commands(settings.bindings);
 const playGuard = new PlayGuard(window, (navigator as Navigator & { keyboard?: { lock: (keys: string[]) => Promise<void>; unlock: () => void } }).keyboard);
 const controls = commands.live;
+const recorder = new JumpRecorder();
 let yaw = 0, pitch = 0, locked = false, started = false, settingsPreview = false, jumpUsedLJ = false;
 let checkpoint: Position | null = null;
 let savedPositions: SavedPosition[] = [];
@@ -167,6 +167,7 @@ function applyPreferences() {
   writeSettings();
 }
 const settingsPanel = new SettingsPanel($('settings-tab'), settings, applyPreferences);
+const leaderboard = new LeaderboardPanel($('leaderboard-tab'), message => toast(message));
 applyPreferences();
 function updateStatsPanel() {
   $('jump-panel').hidden = !settings.jumpStats;
@@ -242,7 +243,11 @@ function showResult(result: Result) {
   const updatedRecords = saveBest(records, entry);
   if (updatedRecords !== records) { records = updatedRecords; writeRecords(); }
   $('history-count').textContent = String(Number($('history-count').textContent) + 1);
-  void archive.append(entry, records).then(() => accounts?.wake());
+  void archive.append(entry, records);
+  const replay = recorder.current();
+  // Auto-hop jumps never count on the leaderboard.
+  if (replay && !settings.autoBhop) leaderboard.submit(result, { ...replay, tickRate: settings.tickRate, mapId: settings.mapId,
+    mapContentVersion, physicsVersion: import.meta.env.VITE_PHYSICS_VERSION ?? '' });
   $('distance').textContent = result.distance.toFixed(2); $('distance').classList.toggle('miss', !result.valid);
   $('result-status').textContent = result.valid ? 'LANDED' : result.landed ? 'INVALID' : 'MISS'; $('result-status').classList.toggle('failed', !result.valid);
   $('pre-speed').textContent = result.preSpeed.toFixed(1); $('max-speed').textContent = result.maxSpeed.toFixed(1);
@@ -281,7 +286,7 @@ function setLocked(value: boolean) {
   if (value || document.hasFocus()) playGuard.setPlaying(value, !!document.fullscreenElement);
   else void playGuard.capture(false);
   engagement.setPlaying(value && !document.hidden);
-  locked = value; accounts?.wake(); controls.clear(); settingsPanel.cancelCapture(); lastTime = performance.now(); commands.reset(lastTime, yaw); movement.jumpHeld = false;
+  locked = value; controls.clear(); settingsPanel.cancelCapture(); lastTime = performance.now(); commands.reset(lastTime, yaw); movement.jumpHeld = false;
   $('menu').hidden = value; $('hud').hidden = !value; $('menu-button').hidden = !value;
   if (value) $<HTMLDetailsElement>('jump-details').open = false;
   document.body.classList.toggle('playing', value);
@@ -377,18 +382,14 @@ document.addEventListener('auxclick', event => { if (locked) event.preventDefaul
 $('team').addEventListener('change', () => { settings.team = $<HTMLSelectElement>('team').value === 't' ? 't' : 'ct'; void world.viewmodel.setTeam(settings.team); writeSettings(); });
 void world.viewmodel.setTeam(settings.team);
 for (const name of ['jumpStats', 'sound', 'trail', 'viewmodel', 'leftHand'] as const) $(name).addEventListener('change', () => { settings[name] = $<HTMLInputElement>(name).checked; if (name === 'jumpStats') updateStatsPanel(); if (name === 'sound') sounds.enabled = settings.sound; if (name === 'trail') { if (settings.trail && movement.result) world.showTrail(movement.result.path); else world.disposeGroup(world.trail); } writeSettings(); });
-document.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach(button => button.addEventListener('click', () => { settingsPanel.cancelCapture(); settingsPreview = button.dataset.tab === 'settings'; document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('active', b === button)); for (const name of ['practice', 'maps', 'settings', 'session']) $(`${name}-tab`).hidden = name !== button.dataset.tab; if (button.dataset.tab === 'session') void historyPanel?.refresh(); }));
+document.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach(button => button.addEventListener('click', () => { settingsPanel.cancelCapture(); settingsPreview = button.dataset.tab === 'settings'; document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('active', b === button)); for (const name of ['practice', 'maps', 'settings', 'session', 'leaderboard']) $(`${name}-tab`).hidden = name !== button.dataset.tab; if (button.dataset.tab === 'session') void historyPanel?.refresh(); if (button.dataset.tab === 'leaderboard') void leaderboard.refresh(); }));
 $('fullscreen').addEventListener('click', async () => { try { if (document.fullscreenElement) await document.exitFullscreen(); else await document.documentElement.requestFullscreen(); } catch { toast('Fullscreen is unavailable in this browser'); } });
 $('about-button').addEventListener('click', () => $<HTMLDialogElement>('about').showModal());
 $('close-about').addEventListener('click', () => $<HTMLDialogElement>('about').close());
-function buildHistoryPanel() {
-  historyPanel?.destroy();
-  const target = archive;
-  historyPanel = new HistoryPanel($('history-browser'), target, count => { if (archive === target) $('history-count').textContent = String(count); }, () => records, {
+historyPanel = new HistoryPanel($('history-browser'), archive, count => { $('history-count').textContent = String(count); }, () => records, {
   preferences: () => structuredClone(settings), checkpoints: () => structuredClone(savedPositions),
-  bests: imported => { if (archive !== target) return; records = readBests([...records, ...imported]); writeRecords(); updateSession(); accounts?.wake(); },
+  bests: imported => { records = readBests([...records, ...imported]); writeRecords(); updateSession(); },
   apply: (preferences, checkpoints, display) => {
-    if (archive !== target) return;
     const notes: string[] = [];
     if (preferences) {
       const restored = { ...preferences, mapId: settings.mapId, tickRate: settings.tickRate,
@@ -410,19 +411,7 @@ function buildHistoryPanel() {
     return notes.join(' ');
   },
 });
-}
-buildHistoryPanel();
-const hydrateGuest = guestArchive.bests().then(saved => { guestRecords = readBests([...guestRecords, ...saved]); if (archive === guestArchive) { records = guestRecords; writeRecords(); updateSession(); } }).catch(() => {});
-accounts = new AccountPanel($('account-controls'), guestArchive, {
-  canRun: () => !locked && !document.hidden, guestBests: () => guestRecords, export: async () => { await historyPanel?.export(); },
-  activate: async (next) => {
-    await hydrateGuest; const nextRecords = next === guestArchive ? guestRecords : readBests(await next.bests());
-    while (locked || document.hidden) await new Promise(resolve => setTimeout(resolve, 250));
-    archive = next; records = nextRecords;
-    $('history-count').textContent = '0'; buildHistoryPanel(); updateSession();
-  },
-  changed: async () => { const target = archive; const saved = await target.bests(); if (archive !== target) return; records = readBests([...records, ...saved]); updateSession(); await historyPanel?.refresh(); },
-});
+void archive.bests().then(saved => { records = readBests([...records, ...saved]); writeRecords(); updateSession(); }).catch(() => {});
 updateSession(); createIcons({ icons: { ArrowLeftRight }, attrs: { 'aria-hidden': 'true' } });
 function updateHUD() {
   const sp = speed(movement.velocity); $('speed').textContent = String(Math.round(sp));
@@ -444,6 +433,7 @@ function frame(_frameTimestamp: number) {
       if (movement.grounded && !movement.jump) jumpBlock = blockAt(mapLanes(classic), movement.support()?.id ?? '')?.gap ?? 0;
       if (movement.grounded && !movement.jump) jumpUsedLJ = false;
       if (input.lj) jumpUsedLJ = true;
+      recorder.beforeStep(movement, input);
       movement.step(input);
       if (belowMap(classic, movement.position)) { fallTime += 1 / movement.tickRate; if (fallTime > 0.32) { reset(); sounds.play('checkpoint'); } } else fallTime = 0;
     });

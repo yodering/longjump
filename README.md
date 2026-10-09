@@ -42,7 +42,7 @@ The HUD follows GOKZ: a center info panel with speed (takeoff speed in parenthes
 
 History backups include all attempts, personal bests, preferences and map-specific saved positions. Import previews new attempts and duplicates before merging. Applying preferences or saved positions is optional; display settings need a separate choice. Reimporting a file adds no duplicate attempts. Version-1 history exports remain supported, including archived Concrete attempts. Saved positions survive reloads and only restore on matching map geometry with safe standing support. Backups support up to 100,000 attempts and 128 MiB per file. Browser storage quotas still apply.
 
-The [accounts and multiplayer plan](research/roadmap/accounts-multiplayer.md) tracks optional cloud saves and shared practice rooms. The [account-service prototype](worker/README.md) currently runs locally; signup and cloud sync are not available on the public game yet.
+The Leaderboard tab posts your best manual (auto-hop off) jumps under a name you choose. The server replays each jump with the same physics before accepting it. See the [leaderboard server](server/README.md) and the [leaderboard and multiplayer plan](research/roadmap/leaderboard-multiplayer.md). It is not deployed yet.
 
 ## Movement and fidelity
 

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "RAILPACK",
+    "buildCommand": "bunx tsc --project server/tsconfig.json",
+    "watchPatterns": ["server/**", "src/**", "public/maps/*/map.json", "package.json", "bun.lock", "railway.json"]
+  },
+  "deploy": {
+    "startCommand": "bun server/main.ts",
+    "healthcheckPath": "/healthz",
+    "restartPolicyType": "ON_FAILURE",
+    "numReplicas": 1
+  }
+}

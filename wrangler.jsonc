@@ -1,10 +1,16 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "longjump",
+  "main": "worker/proxy.ts",
   "compatibility_date": "2026-10-09",
   "observability": { "enabled": true },
   "assets": {
     "directory": "./dist",
-    "not_found_handling": "single-page-application"
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    // Only API requests invoke the Worker; game assets stay free static requests.
+    "run_worker_first": ["/api/*"]
   }
+  // API_URL and PROXY_SECRET are Worker secrets. Without them /api/* returns
+  // 503 and the game shows the leaderboard as unavailable.
 }

@@ -5,19 +5,19 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "build": "tsc && tsc --project worker/tsconfig.json && vite build",
-    "accounts:setup": "bun scripts/setup-account-dev.ts && bunx wrangler d1 migrations apply longjump-accounts --local --config worker/wrangler.jsonc",
-    "accounts:dev": "bunx wrangler dev --config worker/wrangler.jsonc --port 8787",
+    "build": "tsc && tsc --project server/tsconfig.json && tsc --project worker/tsconfig.json && vite build",
     "test": "bun test",
-    "preview": "vite preview --host 127.0.0.1"
+    "preview": "vite preview --host 127.0.0.1",
+    "server:dev": "ALLOW_DIRECT=1 bun --watch server/main.ts",
+    "leaderboard:admin": "bun scripts/leaderboard-admin.ts"
   },
   "dependencies": {
-    "better-auth": "^1.7.7",
     "lucide": "^1.53.0",
     "three": "^0.180.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261009.1",
+    "@types/bun": "^1.4.2",
     "@types/three": "^0.180.0",
     "fake-indexeddb": "^6.2.5",
     "typescript": "^5.9.0",
