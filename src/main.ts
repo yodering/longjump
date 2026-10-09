@@ -59,7 +59,7 @@ app.innerHTML = `
       </section>
       <section id="session-tab" class="tab-content" hidden><div id="session-list"></div></section>
       <button id="start" class="start-button"><i data-lucide="play" aria-hidden="true"></i><span>Play</span></button>
-      <div id="start-note" class="start-note">Click Play to capture the mouse.</div>
+      <div id="start-note" class="start-note">Click Play or press Esc to capture the mouse.</div>
     </div>
     <footer class="menu-footer"><span>Made by <a href="https://twitter.com/yodering" target="_blank" rel="noreferrer">@yodering</a></span><button id="about-button" aria-label="About movement and maps">About</button></footer>
   </main>
@@ -199,7 +199,7 @@ async function changeMap(id: MapId) {
     if (!data) world.buildPlatforms(CONCRETE_GAP);
     loadingMap = false; reset(true); clearResult(); writeSettings(); updateSession();
     engagement.configure(playContext()); engagement.mapLoaded();
-    $('start-note').textContent = 'Click Play to capture the mouse.';
+    $('start-note').textContent = 'Click Play or press Esc to capture the mouse.';
   } catch (error) { console.error(error); settings.mapId = previous; $('start-note').textContent = 'Map could not load. Choose a map to retry.'; }
   finally { loadingMap = false; $<HTMLButtonElement>('start').disabled = false; document.querySelectorAll<HTMLButtonElement>('[data-map]').forEach(b => b.disabled = false); }
 }
@@ -266,7 +266,7 @@ async function enter() {
   if (innerWidth < 700) { $('start-note').textContent = 'This room needs a desktop keyboard and mouse.'; return; }
   try {
     await lockMouse(world.renderer.domElement);
-    $('start-note').textContent = 'Click Play to capture the mouse.';
+    $('start-note').textContent = 'Click Play or press Esc to capture the mouse.';
     started = true;
     try { await sounds.unlock(); } catch (error) { console.error(error); toast('Some sounds could not load'); }
   } catch (error) { console.warn('Pointer lock request rejected:', error); $('start-note').textContent = 'Click Play in a focused browser window to capture the mouse.'; }
@@ -292,8 +292,23 @@ function runAction(action: Action | undefined) {
 }
 document.addEventListener('keydown', event => {
   if (settingsPanel.captureToken(event.code)) { event.preventDefault(); return; }
+  if (event.code === 'Escape') {
+    // A modal keeps its native Escape-to-dismiss behavior. Binding capture
+    // above also gets the first Escape, so cancelling never resumes play.
+    if ($<HTMLDialogElement>('about').open || event.defaultPrevented) return;
+    event.preventDefault();
+    if (event.repeat) return;
+    if (locked) {
+      playGuard.setPlaying(false, false);
+      document.exitPointerLock();
+    } else {
+      // Commit any focused settings input before hiding the menu.
+      (document.activeElement as HTMLElement | null)?.blur();
+      void enter();
+    }
+    return;
+  }
   if (!locked) return;
-  if (event.code === 'Escape') playGuard.setPlaying(false, false);
   if (controls.action(event.code) || ['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(event.code)) event.preventDefault();
   if (!event.repeat) runAction(commands.button('down', event.code, event.timeStamp));
 });
