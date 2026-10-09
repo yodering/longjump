@@ -207,6 +207,7 @@ def material_for(pak, glb, g, images, mesh):
     def image(p, normal):
         if p not in images:
             picture, limit = iv.decode_vtf(pak.get_file(p).read()), NORMAL_SIZE if normal else COLOR_SIZE
+            if normal: picture = iv.flat_empty_normals(picture)  # before resizing, so empty texels do not bleed into islands
             if max(picture.size) > limit: picture = picture.resize((picture.size[0] * limit // max(picture.size), picture.size[1] * limit // max(picture.size)), Image.LANCZOS)
             data = iv.jpeg(picture, normal)
             g['images'].append({'bufferView': glb.view(data), 'mimeType': 'image/jpeg', 'name': p.split('/')[-1]})

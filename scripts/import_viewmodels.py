@@ -196,6 +196,14 @@ def decode_vtf(data):
     mode, bpp, order = raw[fmt]
     return Image.frombytes(mode, (width, height), data[-width * height * bpp:], 'raw', order).convert('RGBA')
 
+def flat_empty_normals(image):
+    """Some CS:GO normal maps leave regions the model's UVs still use as all-zero DXT blocks; z = 2b - 1 <= 0 is no
+    valid tangent-space normal and would light those surfaces from inside, so they become flat (128, 128, 255)."""
+    r, g, b, a = image.convert('RGBA').split()
+    empty = b.point(lambda v: 255 if v < 128 else 0)
+    for channel, value in ((r, 128), (g, 128), (b, 255)): channel.paste(value, mask=empty)
+    return Image.merge('RGBA', (r, g, b, a))
+
 def jpeg(image, normal=False):
     image = image.convert('RGB')
     if normal:  # Source normal maps are DirectX (Y down); glTF expects Y up.
@@ -286,7 +294,8 @@ def build(pak, team, output):
     images = {}
     def image(path, normal):
         if path not in images:
-            data = jpeg(decode_vtf(pak.get_file(path).read()), normal)
+            picture = decode_vtf(pak.get_file(path).read())
+            data = jpeg(flat_empty_normals(picture) if normal else picture, normal)
             g['images'].append({'bufferView': glb.view(data), 'mimeType': 'image/jpeg', 'name': path.split('/')[-1]})
             g['textures'].append({'source': len(g['images']) - 1, 'sampler': 0}); images[path] = len(g['textures']) - 1
         return images[path]
