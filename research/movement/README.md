@@ -22,6 +22,16 @@ Corner traces now choose the contact plane after applying the collision epsilon.
 
 ## Verification
 
+### Second pass: 8 October 2026
+
+Rechecked `CheckParameters`, `PreventBunnyJumping`, `CheckJumpButton`, `Duck`, `FullWalkMove`, `CheckVelocity`, `CheckFalling` and input `KeyState` against the pinned references above. Acceleration, friction, stamina, duck speed, gravity order and the takeoff cap remain unchanged. In particular, the native bunnyhop cap includes vertical velocity after `StartGravity`; changing it to a horizontal-only cap would reduce fidelity.
+
+Two small differences were corrected. `CheckVelocity` now clears NaN position and velocity components before clamping velocity. Landing pitch punch now observes the native upper bound of 1024 units/second, from [the non-HL2 definitions in shareddefs.h](https://github.com/perilouswithadollarsign/cstrike15_src/blob/f82112a2388b841d72cb62ca48ab1846dfcc11c8/game/shared/shareddefs.h). Normal long-jump landings still receive the same punch and stamina cost. This does not add fall damage or death.
+
+New tests at both tick rates check the three-dimensional takeoff cap, landing punch boundaries, its next-command exponential decay, landing stamina, and recovery from NaN components. The full suite contains 105 tests.
+
+The camera now extrapolates position from the latest completed tick, with a collision trace, instead of displaying the previous-to-current tick interval. This reduces visual delay but is an approximation: it does not run the next command's acceleration, crouch transition or step movement. It never changes measured jumps. The README and sound-sample note now describe the actual custom thresholds rather than calling them GOKZ defaults.
+
 Run `bun test` and `bun run build` from the repository root.
 
 The six-strafe recording in `tests/commands.test.ts` includes a run-up, W release, mouse-wheel jump, alternating A/D turns and late crouch. Every command, position, speed, stamina value and final result must match across 30, 60, 144 and 240 FPS, plus an uneven frame schedule containing an 80 ms stall, at both tick rates. These are deterministic synthetic inputs, not recordings from CS:GO.
@@ -30,4 +40,12 @@ Physics tests also cover jump height and distance, stamina and deadstrafe orderi
 
 The browser check verified map loading and the cleaned-up menus. The in-app browser rejected both raw and standard pointer lock with Chromium's `UnknownError`, so it could not provide a mouse-controlled playtest. Fallback behavior is covered by the unit tests.
 
-Remaining differences include double-precision arithmetic, axis-aligned collision, browser input timing, eye-position interpolation, and incomplete GOKZ statistics. Slopes, ladders, water, moving platforms and non-default surface physics remain outside the controller. A claim of exact or near-perfect parity needs game-recorded command/state traces and a side-by-side playtest.
+Remaining differences include double-precision arithmetic, axis-aligned collision, browser input timing, approximate camera prediction, and incomplete GOKZ statistics. Source's crouch-stuck recovery and quadrant ground traces are also absent. Hard-fall roll, fall damage, footsteps and surface-dependent landing sounds are not implemented. Slopes, ladders, water, moving platforms and non-default surface physics remain outside the controller. Consecutive wheel pulses explicitly rearm manual jumping here; that browser behavior still needs comparison with native command button flags. A claim of exact or near-perfect parity needs game-recorded command/state traces and a side-by-side playtest.
+
+## Next fidelity work
+
+Capture matched 64- and 128-tick CS:GO/GOKZ runs with tick number, command movement axes, button flags, view angles, origin, velocity, ground state, crouch state and stamina. Include a flat run, six-strafe long jump, early/late duck, repeated wheel hops, landing against a wall and an 18-unit step. Record the game build, map checksum, movement cvars and initial state with each capture.
+
+Replay those commands in this controller and report the first divergent tick plus position/velocity error over time. Establish tolerances from repeat native captures before deciding whether float32 arithmetic or collision changes improve parity. Keep browser timing tests separate from physics replay so input delivery differences do not look like acceleration bugs. Then compare native-browser play with the game at matching sensitivity, FOV, tick rate and frame rate; measure input-to-camera delay rather than relying only on feel.
+
+Plane-based BSP collision is the next substantial controller project. Port it and its edge/step cases before importing maps that depend on slopes. Every physics or collision change should carry a version so saved results and future room clients can identify the rules they used. See the [accounts and multiplayer plan](../roadmap/accounts-multiplayer.md) for how that version enters saved data and room admission.

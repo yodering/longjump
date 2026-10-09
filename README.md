@@ -26,9 +26,9 @@ Open **http://127.0.0.1:5173/** in a desktop browser with WebGL and pointer-lock
 | F | Inspect knife |
 | Mouse 1 / Mouse 2 | Light / heavy knife swing (cosmetic) |
 | H | Show / hide the jump stats panel |
-| Esc | Release mouse and pause |
+| Esc | Toggle the menu / resume play |
 
-These are the default binds. **Settings → Controls** supports keyboard, mouse buttons and wheel directions, multiple binds per action, removing binds and restoring defaults. Escape remains reserved for pausing. The optional **Long jump bind** combines jump + duck and cancels held forward/back until those keys are released and pressed again. Release the LJ bind to stand during flight, then duck again before landing. Attempts record whether the LJ bind was used; it does not automate strafing or landing.
+These are the default binds. **Settings → Controls** supports keyboard, mouse buttons and wheel directions, multiple binds per action, removing binds and restoring defaults. Escape remains reserved for toggling the menu. The optional **Long jump bind** combines jump + duck and cancels held forward/back until those keys are released and pressed again. Release the LJ bind to stand during flight, then duck again before landing. Attempts record whether the LJ bind was used; it does not automate strafing or landing.
 
 **Settings → Import / export** previews supported commands from a CS:GO `.cfg` before applying them. It imports movement/knife binds, a recognized LJ alias, sensitivity, `m_yaw` / `m_pitch`, handedness, viewmodel offsets/FOV/bob and static crosshair settings. Unsupported binds and commands are listed and skipped; config text never executes. Recursive aliases, null-strafe scripts, `exec`, purchases, networking and movement cvars are outside the importer. Try [examples/longjump.cfg](examples/longjump.cfg). Config import merges supported binds with current binds; exported JSON profiles restore the full preference set, retaining the current map and tick rate. Exported `.cfg` files carry the supported Source-style settings; checkpoint/stats commands use VNL-specific names.
 
@@ -113,7 +113,7 @@ The files come straight from Valve's final CS:GO content depot, downloaded anony
 
 ## KZ audio
 
-The five announcer clips are the actual files shipped in GOKZ, rather than speech synthesis. Valid landed long jumps play only the highest reached tier: Impressive ≥235, Perfect ≥240, Godlike ≥245, Ownage ≥248 and Wrecker ≥250. Failed jumps, invalid landings and lower distances stay silent. These are GOKZ’s 128-tick vanilla defaults; we currently apply that same distance profile to both preview tick rates. Thresholds and sound packs were configurable on servers, so other servers or older plugins can differ.
+The five announcer clips are the actual files shipped in GOKZ, rather than speech synthesis. Valid landed long jumps play only the highest reached tier: Impressive ≥230, Perfect ≥235, Godlike ≥240, Ownage ≥243 and Wrecker ≥246. Failed jumps, invalid landings and lower distances stay silent. These custom practice thresholds apply at both tick rates. Thresholds and sound packs were configurable on servers, so other servers or older plugins can differ.
 
 Checkpoint saves, returns and resets use the CS:GO `buttons/blip1.wav` sample; rejected checkpoint actions use `buttons/button10.wav`. They are not played on every takeoff or miss. Timer start/end sounds are separate in GOKZ; this long-jump-only prototype has no course timer, so it does not pretend a reset starts a timed run.
 

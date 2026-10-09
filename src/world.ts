@@ -237,7 +237,7 @@ export class World {
     this.sky.position.copy(this.camera.position);
     this.renderer.clear(); this.renderer.render(this.scene, this.camera);
   }
-  // eye: the interpolated eye position from Movement.eye(); punch: CS:GO view punch in degrees (positive looks down).
+  // eye: the rendered eye position from Movement; punch: CS:GO view punch in degrees (positive looks down).
   play(eye: Vec, yaw: number, pitch: number, dt: number,
     view: { punch: number; speed: number; grounded: boolean; show: boolean; leftHand: boolean }) {
     this.camera.position.set(eye.x, eye.z, -eye.y);

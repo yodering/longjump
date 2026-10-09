@@ -1,4 +1,4 @@
-// Vanilla practice thresholds; audio provenance is in research/audio/provenance.json.
+// Custom practice thresholds; audio provenance is in research/audio/provenance.json.
 export const soundTiers = [
   { name: 'impressive', label: 'Impressive', distance: 230 },
   { name: 'perfect', label: 'Perfect', distance: 235 },

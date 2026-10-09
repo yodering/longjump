@@ -5,7 +5,7 @@ export const RULES = { gravity: 800, jumpImpulse: 301.993377, maxSpeed: 250, acc
   friction: 5.2, stopSpeed: 80, hull: 16, height: 72, duckHeight: 54, viewHeight: 64, duckViewHeight: 46, stepSize: 18,
   nonJumpVelocity: 140, duckModifier: 0.34, walkModifier: 0.52, duckSpeedIdeal: 8, moveSpeed: 450, maxVelocity: 3500,
   staminaJumpCost: 0.08, staminaLandCost: 0.05, staminaRecovery: 60, staminaMax: 80, staminaRange: 100,
-  timeBetweenDucks: 0.4, viewPunchDecay: 18 };
+  timeBetweenDucks: 0.4, viewPunchDecay: 18, fatalFallSpeed: 1024 };
 // Traces stop this far short of a surface (engine DIST_EPSILON), so a standing origin rests 1/32 above the floor.
 export const DIST_EPSILON = 0.03125;
 export type Vec = { x: number; y: number; z: number };
@@ -269,7 +269,12 @@ export class Movement {
     if (next !== sp) { v.x *= next / sp; v.y *= next / sp; v.z *= next / sp; }
   }
   private checkVelocity() {
-    for (const a of ['x', 'y', 'z'] as const) this.velocity[a] = Math.max(-RULES.maxVelocity, Math.min(RULES.maxVelocity, this.velocity[a]));
+    // CGameMovement::CheckVelocity repairs NaN components before bounding speed.
+    for (const a of ['x', 'y', 'z'] as const) {
+      if (Number.isNaN(this.position[a])) this.position[a] = 0;
+      if (Number.isNaN(this.velocity[a])) this.velocity[a] = 0;
+      this.velocity[a] = Math.max(-RULES.maxVelocity, Math.min(RULES.maxVelocity, this.velocity[a]));
+    }
   }
   private wish(yaw: number) {
     const x = Math.sin(yaw) * this.fmove + Math.cos(yaw) * this.smove, y = Math.cos(yaw) * this.fmove - Math.sin(yaw) * this.smove;
@@ -438,7 +443,7 @@ export class Movement {
   private checkFalling() {
     if (!this.grounded || this.fallVelocity <= 0) return;
     // CS:GO's landing view punch (degrees of pitch, looking down), then OnLand's stamina cost.
-    if (this.fallVelocity > 16) this.viewPunch = Math.max(0.75, this.fallVelocity * 0.001);
+    if (this.fallVelocity > 16 && this.fallVelocity <= RULES.fatalFallSpeed) this.viewPunch = Math.max(0.75, this.fallVelocity * 0.001);
     this.stamina = Math.min(RULES.staminaMax, Math.max(0, this.stamina + RULES.staminaLandCost * this.fallVelocity));
     this.fallVelocity = 0;
   }

@@ -63,7 +63,7 @@ app.innerHTML = `
         <label class="toggle-row">Last-jump trail <input id="trail" type="checkbox" ${settings.trail ? 'checked' : ''}/></label>
         <label class="toggle-row">KZ sounds <input id="sound" type="checkbox" ${settings.sound ? 'checked' : ''}/></label>
         <label class="setting-range" for="volume">Sound volume <output id="volume-output">${Math.round(settings.volume * 100)}%</output></label><input id="volume" type="range" min="0" max="1" step="0.05" value="${settings.volume}"/>
-        <details class="sound-samples"><summary>Sound samples</summary><div>${soundTiers.map(t => `<button data-sample="${t.name}">${t.label} <small>${t.distance}+</small></button>`).join('')}<button data-sample="checkpoint">Checkpoint beep</button><button data-sample="error">Error beep</button></div><p class="setting-note">GOKZ vanilla long-jump defaults.</p></details>
+        <details class="sound-samples"><summary>Sound samples</summary><div>${soundTiers.map(t => `<button data-sample="${t.name}">${t.label} <small>${t.distance}+</small></button>`).join('')}<button data-sample="checkpoint">Checkpoint beep</button><button data-sample="error">Error beep</button></div><p class="setting-note">Practice long-jump thresholds.</p></details>
         <p id="mouse-scale-note" class="setting-note"></p>
       </section>
       <section id="session-tab" class="tab-content" hidden><div id="personal-bests"></div><div id="history-browser"></div></section>

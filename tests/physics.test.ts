@@ -4,6 +4,38 @@ import { Movement, RULES, DIST_EPSILON, speed, accelerate, type Input } from '..
 const idle: Input = { forward: 0, side: 0, jump: false, duck: false, walk: false, yaw: 0 };
 function flat(m: Movement) { m.boxes = [{ id: 'flat', min: { x: -2000, y: -2000, z: -100 }, max: { x: 2000, y: 2000, z: 0 } }]; m.reset(); }
 for (const tickRate of [64, 128] as const) {
+  test(`${tickRate}t: bunnyhop cap includes StartGravity's vertical half-step`, () => {
+    const m = new Movement(); m.tickRate = tickRate; flat(m); m.velocity.y = 400;
+    m.step({ ...idle, jump: true });
+    const half = RULES.gravity / tickRate / 2;
+    const scale = 275 / Math.hypot(400, half);
+    assert.ok(Math.abs(m.jump!.preSpeed - 400 * scale) < 1e-9);
+    assert.ok(Math.abs(m.velocity.z - (RULES.jumpImpulse - half * scale - 2 * half)) < 1e-9);
+  });
+  test(`${tickRate}t: landing punch respects Source thresholds and decays on the next command`, () => {
+    for (const fall of [16, 16.001, 350, 750, 1024, 1024.001]) {
+      const m = new Movement(); m.tickRate = tickRate; flat(m);
+      m.position.z = 0.5; m.grounded = false; m.velocity.z = -fall;
+      m.step(idle);
+      assert.equal(m.grounded, true);
+      const punch = fall > 16 && fall <= 1024 ? Math.max(0.75, fall * 0.001) : 0;
+      assert.equal(m.viewPunch, punch, `fall speed ${fall}`);
+      assert.equal(m.stamina, Math.min(80, 0.05 * fall));
+      assert.equal(m.fallVelocity, 0);
+      m.step(idle);
+      assert.ok(Math.abs(m.viewPunch - punch * Math.exp(-18 / tickRate)) < 1e-9);
+    }
+  });
+  test(`${tickRate}t: invalid origin and velocity components recover before movement`, () => {
+    const m = new Movement(); m.tickRate = tickRate; flat(m);
+    m.position.x = NaN; m.velocity.y = NaN;
+    m.step(idle);
+    assert.equal(m.position.x, 0);
+    assert.deepEqual(m.velocity, { x: 0, y: 0, z: 0 });
+    assert.ok(Object.values(m.position).every(Number.isFinite));
+    m.step({ ...idle, forward: 1 });
+    assert.ok(m.velocity.y > 0);
+  });
   test(`${tickRate}t: run speed is 250 and diagonal movement gives no prestrafe`, () => {
     for (const side of [0, 1]) {
       const m = new Movement(); m.tickRate = tickRate; flat(m);
