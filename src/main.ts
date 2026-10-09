@@ -9,6 +9,7 @@ import { soundTiers, jumpSound, type Sound } from './sound-tiers';
 import { readHistory, readBests, saveBest, sameCategory, type Entry } from './history';
 import { HistoryArchive } from './history-archive';
 import { HistoryPanel } from './history-panel';
+import { AccountPanel } from './account-panel';
 import { fingerprint, readCheckpoints, checkpointForMap, type SavedPosition } from './backup';
 import { normalizeSettings } from './settings';
 import { tokenLabel, type Action } from './bindings';
@@ -27,12 +28,15 @@ window.setInterval(() => engagement.flush(), 30_000);
 window.addEventListener('pagehide', () => engagement.setPlaying(false));
 document.documentElement.dataset.mode = settings.appearance;
 const legacyHistory = readHistory(read<unknown>('vnl-history', []));
-const archive = new HistoryArchive(legacyHistory);
+const guestArchive = new HistoryArchive(legacyHistory);
+let archive = guestArchive;
+let accounts: AccountPanel | undefined;
+let guestRecords: Entry[] = [];
 let historyPanel: HistoryPanel | undefined;
 let records = readBests(read<unknown>('vnl-bests', []), legacyHistory);
 const category = () => ({ mapId: settings.mapId, tickRate: settings.tickRate, autoBhop: settings.autoBhop });
 const best = () => records.find(record => sameCategory(record, category()))?.distance ?? 0;
-function writeRecords() { try { localStorage.setItem('vnl-bests', JSON.stringify(records)); } catch { /* Keep records in memory when storage is unavailable. */ } }
+function writeRecords() { if (archive !== guestArchive) return; guestRecords = records; try { localStorage.setItem('vnl-bests', JSON.stringify(records)); } catch { /* Keep records in memory when storage is unavailable. */ } }
 writeRecords();
 const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
@@ -67,7 +71,7 @@ app.innerHTML = `
         <details class="sound-samples"><summary>Sound samples</summary><div>${soundTiers.map(t => `<button data-sample="${t.name}">${t.label} <small>${t.distance}+</small></button>`).join('')}<button data-sample="checkpoint">Checkpoint beep</button><button data-sample="error">Error beep</button></div><p class="setting-note">Practice long-jump thresholds.</p></details>
         <p id="mouse-scale-note" class="setting-note"></p>
       </section>
-      <section id="session-tab" class="tab-content" hidden><div id="personal-bests"></div><div id="history-browser"></div></section>
+      <section id="session-tab" class="tab-content" hidden><div id="personal-bests"></div><div id="account-controls"></div><div id="history-browser"></div></section>
       <button id="start" class="start-button"><i data-lucide="play" aria-hidden="true"></i><span>Play</span></button>
       <div id="start-note" class="start-note">Click Play or press Esc to capture the mouse.</div>
     </div>
@@ -177,8 +181,10 @@ function updateSession() {
   const pb = best(); $('pb').textContent = pb ? pb.toFixed(2) : '—'; $('pb-tick').textContent = `${settings.tickRate}T${settings.autoBhop ? ' · AUTO' : ''}`;
   $('hud-pb').hidden = !pb; $('hud-pb').textContent = `PB: ${pb.toFixed(2)} · ${settings.tickRate}T${settings.autoBhop ? ' · AUTO' : ''}`;
   const currentRecords = records.filter(j => j.mapId === settings.mapId && j.tickRate === settings.tickRate);
-  const mode = (j: Entry) => `${j.autoBhop === undefined ? 'LEGACY' : j.autoBhop ? 'AUTO-HOP' : 'MANUAL'}`;
-  const bestMarkup = `<div class="session-heading">PERSONAL BESTS <span>${settings.tickRate}T</span></div>${currentRecords.length ? currentRecords.map(j => `<div class="session-entry"><div><b>${j.distance.toFixed(2)}</b><small>${mode(j)} · ${Number.isFinite(j.at) ? new Date(j.at).toLocaleDateString() : 'Earlier session'}</small></div><span>${j.sync.toFixed(0)}% <small>${j.strafes.length} STRAFES</small></span></div>`).join('') : '<p class="setting-note">No best for this map and tick rate yet.</p>'}`;
+  const mode = (j: Entry) => j.autoBhop === undefined ? 'Legacy' : j.autoBhop ? 'Auto-hop' : 'Manual';
+  const selected = currentRecords.find(j => j.autoBhop === settings.autoBhop);
+  const others = currentRecords.filter(j => j !== selected);
+  const bestMarkup = `<div class="history-best"><div><span>Personal best</span><strong>${selected ? selected.distance.toFixed(2) : '—'}</strong></div><span>${settings.tickRate} tick · ${settings.autoBhop ? 'Auto-hop' : 'Manual'}</span></div>${others.length ? `<details class="history-records"><summary>Other modes</summary>${others.map(j => `<div class="session-entry"><span>${mode(j)}</span><b>${j.distance.toFixed(2)}</b></div>`).join('')}</details>` : ''}`;
   $('personal-bests').innerHTML = bestMarkup;
 
 }
@@ -236,7 +242,7 @@ function showResult(result: Result) {
   const updatedRecords = saveBest(records, entry);
   if (updatedRecords !== records) { records = updatedRecords; writeRecords(); }
   $('history-count').textContent = String(Number($('history-count').textContent) + 1);
-  void archive.append(entry);
+  void archive.append(entry, records).then(() => accounts?.wake());
   $('distance').textContent = result.distance.toFixed(2); $('distance').classList.toggle('miss', !result.valid);
   $('result-status').textContent = result.valid ? 'LANDED' : result.landed ? 'INVALID' : 'MISS'; $('result-status').classList.toggle('failed', !result.valid);
   $('pre-speed').textContent = result.preSpeed.toFixed(1); $('max-speed').textContent = result.maxSpeed.toFixed(1);
@@ -275,7 +281,7 @@ function setLocked(value: boolean) {
   if (value || document.hasFocus()) playGuard.setPlaying(value, !!document.fullscreenElement);
   else void playGuard.capture(false);
   engagement.setPlaying(value && !document.hidden);
-  locked = value; controls.clear(); settingsPanel.cancelCapture(); lastTime = performance.now(); commands.reset(lastTime, yaw); movement.jumpHeld = false;
+  locked = value; accounts?.wake(); controls.clear(); settingsPanel.cancelCapture(); lastTime = performance.now(); commands.reset(lastTime, yaw); movement.jumpHeld = false;
   $('menu').hidden = value; $('hud').hidden = !value; $('menu-button').hidden = !value;
   if (value) $<HTMLDetailsElement>('jump-details').open = false;
   document.body.classList.toggle('playing', value);
@@ -375,10 +381,14 @@ document.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach(button => but
 $('fullscreen').addEventListener('click', async () => { try { if (document.fullscreenElement) await document.exitFullscreen(); else await document.documentElement.requestFullscreen(); } catch { toast('Fullscreen is unavailable in this browser'); } });
 $('about-button').addEventListener('click', () => $<HTMLDialogElement>('about').showModal());
 $('close-about').addEventListener('click', () => $<HTMLDialogElement>('about').close());
-historyPanel = new HistoryPanel($('history-browser'), archive, count => { $('history-count').textContent = String(Math.max(Number($('history-count').textContent), count)); }, () => records, {
+function buildHistoryPanel() {
+  historyPanel?.destroy();
+  const target = archive;
+  historyPanel = new HistoryPanel($('history-browser'), target, count => { if (archive === target) $('history-count').textContent = String(count); }, () => records, {
   preferences: () => structuredClone(settings), checkpoints: () => structuredClone(savedPositions),
-  bests: imported => { records = readBests([...records, ...imported]); writeRecords(); updateSession(); },
+  bests: imported => { if (archive !== target) return; records = readBests([...records, ...imported]); writeRecords(); updateSession(); accounts?.wake(); },
   apply: (preferences, checkpoints, display) => {
+    if (archive !== target) return;
     const notes: string[] = [];
     if (preferences) {
       const restored = { ...preferences, mapId: settings.mapId, tickRate: settings.tickRate,
@@ -400,7 +410,19 @@ historyPanel = new HistoryPanel($('history-browser'), archive, count => { $('his
     return notes.join(' ');
   },
 });
-void archive.bests().then(saved => { records = readBests([...records, ...saved]); writeRecords(); updateSession(); }).catch(() => {});
+}
+buildHistoryPanel();
+const hydrateGuest = guestArchive.bests().then(saved => { guestRecords = readBests([...guestRecords, ...saved]); if (archive === guestArchive) { records = guestRecords; writeRecords(); updateSession(); } }).catch(() => {});
+accounts = new AccountPanel($('account-controls'), guestArchive, {
+  canRun: () => !locked && !document.hidden, guestBests: () => guestRecords, export: async () => { await historyPanel?.export(); },
+  activate: async (next) => {
+    await hydrateGuest; const nextRecords = next === guestArchive ? guestRecords : readBests(await next.bests());
+    while (locked || document.hidden) await new Promise(resolve => setTimeout(resolve, 250));
+    archive = next; records = nextRecords;
+    $('history-count').textContent = '0'; buildHistoryPanel(); updateSession();
+  },
+  changed: async () => { const target = archive; const saved = await target.bests(); if (archive !== target) return; records = readBests([...records, ...saved]); updateSession(); await historyPanel?.refresh(); },
+});
 updateSession(); createIcons({ icons: { ArrowLeftRight }, attrs: { 'aria-hidden': 'true' } });
 function updateHUD() {
   const sp = speed(movement.velocity); $('speed').textContent = String(Math.round(sp));

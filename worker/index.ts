@@ -6,7 +6,7 @@ import { saveBest } from '../src/history';
 import type { SavedEntry } from '../src/history-archive';
 
 export type Env = { DB: D1Database; AUTH_SECRET: string; AUTH_ORIGIN: string; ASSETS?: { fetch(request: Request): Promise<Response> } };
-class HttpError extends Error { constructor(readonly status: number, message: string) { super(message); } }
+class HttpError extends Error { constructor(readonly status: number, message: string, readonly code?: string) { super(message); } }
 const json = (value: unknown, status = 200, headers = new Headers()) => {
   headers.set('Content-Type', 'application/json'); headers.set('Cache-Control', 'no-store');
   headers.set('X-Content-Type-Options', 'nosniff'); return new Response(JSON.stringify(value), { status, headers });
@@ -75,7 +75,7 @@ export async function handle(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url), path = url.pathname;
     if (!path.startsWith('/api/')) return env.ASSETS?.fetch(request) ?? new Response('Not found', { status: 404 });
     if (url.origin !== env.AUTH_ORIGIN) throw new HttpError(403, 'Wrong account-service origin.');
-    const allowed = ['/api/account', '/api/account/signup', '/api/account/login', '/api/account/logout', '/api/account/recover', '/api/sync'];
+    const allowed = ['/api/account', '/api/account/signup', '/api/account/login', '/api/account/logout', '/api/account/recover', '/api/account/delete', '/api/sync'];
     // Never expose Better Auth's email/signup/update/link endpoints to the browser.
     if (!allowed.includes(path)) throw new HttpError(404, 'Not found.');
     if (request.method !== 'GET' && request.method !== 'POST') throw new HttpError(405, 'Method not allowed.');
@@ -101,8 +101,12 @@ export async function handle(request: Request, env: Env): Promise<Response> {
       return await authResponse(await auth.api.signInUsername({ headers: request.headers, asResponse: true,
         body: { username, password: input.password } }));
     }
-    if (path === '/api/account/logout' && request.method === 'POST')
+    if (path === '/api/account/logout' && request.method === 'POST') {
+      const current = await auth.api.getSession({ headers: request.headers });
+      if (current && request.headers.has('X-Longjump-Account') && request.headers.get('X-Longjump-Account') !== current.user.id)
+        throw new HttpError(409, 'Your sign-in changed in another tab. Sign in again.', 'account_changed');
       return await authResponse(await auth.api.signOut({ headers: request.headers, asResponse: true }));
+    }
     if (path === '/api/account/recover' && request.method === 'POST') {
       await rateLimit(env, request, 'recover', 5);
       const input = await body(request), username = name(input.username).toLowerCase(), pass = password(input.password);
@@ -125,6 +129,28 @@ export async function handle(request: Request, env: Env): Promise<Response> {
     }
     const session = await auth.api.getSession({ headers: request.headers });
     if (!session) throw new HttpError(401, 'Sign in to sync progress.');
+    const expected = request.headers.get('X-Longjump-Account');
+    if (expected && expected !== session.user.id)
+      throw new HttpError(409, 'Your sign-in changed in another tab. Sign in again.', 'account_changed');
+    if (path === '/api/account/delete' && request.method === 'POST') {
+      if (expected !== session.user.id) throw new HttpError(403, 'Confirm the account you want to delete.');
+      await rateLimit(env, request, 'delete', 5, 3600);
+      const input = await body(request);
+      if (typeof input.username !== 'string' || input.username.toLowerCase() !== session.user.username || typeof input.password !== 'string' || input.password.length > 128)
+        throw new HttpError(400, 'Enter this account’s username and password.');
+      const stored = await env.DB.prepare("SELECT password FROM account WHERE userId = ? AND providerId = 'credential'").bind(session.user.id).first<{ password: string }>();
+      const context = await auth.$context;
+      if (!stored || !await context.password.verify({ hash: stored.password, password: input.password }))
+        throw new HttpError(401, 'Username or password is incorrect.');
+      // Recheck the credential and session inside the delete, so recovery/logout
+      // during password verification cannot authorize a stale deletion request.
+      const removed = await env.DB.prepare(`DELETE FROM user WHERE id = ?
+        AND EXISTS (SELECT 1 FROM account WHERE userId = ? AND providerId = 'credential' AND password = ?)
+        AND EXISTS (SELECT 1 FROM session WHERE id = ? AND userId = ? AND expiresAt > ?)`)
+        .bind(session.user.id, session.user.id, stored.password, session.session.id, session.user.id, Date.now()).run();
+      if (removed.meta.changes !== 1) throw new HttpError(401, 'Sign in again before deleting your account.');
+      return json({ deleted: true });
+    }
     if (path === '/api/sync' && request.method === 'GET') {
       await rateLimit(env, request, 'sync-read', 120);
       const after = Number(url.searchParams.get('after') ?? 0);
@@ -132,7 +158,7 @@ export async function handle(request: Request, env: Env): Promise<Response> {
       const rows = await env.DB.prepare('SELECT sequence, payload FROM attempt WHERE userId = ? AND sequence > ? ORDER BY sequence LIMIT 51').bind(session.user.id, after).all<{ sequence: number; payload: string }>();
       const page = rows.results.slice(0, 50);
       const bests = await env.DB.prepare('SELECT payload FROM personal_best WHERE userId = ?').bind(session.user.id).all<{ payload: string }>();
-      return json({ attempts: page.map(row => JSON.parse(row.payload)), cursor: page.at(-1)?.sequence ?? after,
+      return json({ owner: session.user.id, attempts: page.map(row => JSON.parse(row.payload)), cursor: page.at(-1)?.sequence ?? after,
         more: rows.results.length > 50, bests: bests.results.map(row => JSON.parse(row.payload)) });
     }
     if (path === '/api/sync' && request.method === 'POST') {
@@ -166,11 +192,11 @@ export async function handle(request: Request, env: Env): Promise<Response> {
           .bind(session.user.id, category, entry.distance, JSON.stringify(entry)));
       }
       if (statements.length) await env.DB.batch(statements);
-      return json({ acknowledged: attempts.map(a => a.id) });
+      return json({ owner: session.user.id, acknowledged: attempts.map(a => a.id) });
     }
     throw new HttpError(405, 'Method not allowed.');
   } catch (error) {
-    if (error instanceof HttpError) return json({ error: error.message }, error.status);
+    if (error instanceof HttpError) return json({ error: error.message, ...(error.code ? { code: error.code } : {}) }, error.status);
     if (error instanceof Error && error.message.includes('LONGJUMP_QUOTA'))
       return json({ error: 'Cloud storage is full. Keep your local backup. No attempts from this batch were saved.' }, 413);
     if (error instanceof Error && error.message.includes('LONGJUMP_CONFLICT'))

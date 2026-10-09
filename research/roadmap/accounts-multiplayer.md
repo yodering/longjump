@@ -6,7 +6,7 @@ Updated 9 October 2026. File backups are implemented. Next: finish optional acco
 
 Attempts live in IndexedDB. History imports and exports version-2 backups containing attempts, personal bests, preferences and persistent map-specific checkpoints. Version-1 imports remain supported. Imports preview new/duplicate counts and merge atomically; preferences and checkpoint restoration are separate choices. New attempts record rules and map versions. Clearing browser storage can still erase progress.
 
-A local Better Auth + Cloudflare D1 prototype now implements username signup, login, logout, rotating recovery keys and account-owned history/PB sync. Its migrations, payload limits, account quotas and shared rate limits are tested, including in Wrangler’s local runtime. The public site does not expose accounts yet. The account UI, durable upload queue, account-separated local caches, preferences/checkpoint cloud conflicts, account deletion/export and production deployment remain unfinished. There is no multiplayer server.
+A local Better Auth + Cloudflare D1 prototype now implements username signup, login, logout, rotating recovery keys and account-owned history/PB sync. Its migrations, payload limits, account quotas and shared rate limits are tested, including in Wrangler’s local runtime. The public site does not expose accounts yet. The account UI, durable upload queue, account-separated local caches and deletion/export controls are implemented locally. Preferences/checkpoint cloud conflicts and production deployment remain unfinished. There is no multiplayer server.
 
 Current best categories are map, tick rate and auto-hop setting; LJ bind usage is metadata. Preserve that behavior. Older attempts whose auto-hop setting was never recorded retain their unknown category.
 
@@ -96,4 +96,10 @@ Measure tick deadlines, correction size and bandwidth at full room capacity unde
 
 ## Current milestone
 
-Backup import/export is complete and browser-tested. The account backend has passed local username, recovery, session, ownership, retry and quota checks. Next, build the account UI and durable sync behavior above, then publish the service with an actual D1 binding and production secret. Shared practice rooms and third-person models follow account sync.
+Backup import/export is complete and browser-tested. The account backend has passed local username, recovery, session, ownership, retry and quota checks. The account UI and durable sync behavior now pass local checks. Next, publish the service with an actual D1 binding and production secret. Shared practice rooms and third-person models follow account sync.
+
+## Local account milestone — October 2026
+
+The History menu now includes username/password signup and sign-in, downloadable/copyable recovery keys, explicit guest-history copying, cloud-save status, sign-out and confirmed account deletion with backup export. Account caches and durable outboxes are isolated by permanent account ID. Uploads and downloads run while paused, use server cursors and keep queued attempts until validated acknowledgments. Offline sessions retain their local account history; stale cross-tab sessions cannot write to another account.
+
+History and PB sync are implemented locally. Preferences and saved positions remain device-local for this release; portable backups already transfer both. Multiplayer, player models, preference revision conflicts and local-cache management remain later work. Production release still needs a real D1 binding, secret storage, deliberately switching the deployment config, and production cookie/cost checks.
