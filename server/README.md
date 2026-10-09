@@ -1,6 +1,6 @@
-# Leaderboard server
+# Leaderboard and room server
 
-One Bun process on Railway with SQLite on a persistent volume. Rooms will join it later. Cloudflare keeps serving the game. The Worker in [`worker/proxy.ts`](../worker/proxy.ts) forwards `/api/*` here, so the game calls a single origin.
+One Bun process on Railway with SQLite on a persistent volume. It serves the leaderboard API and private multiplayer rooms. Cloudflare keeps serving the game. The Worker in [`worker/proxy.ts`](../worker/proxy.ts) forwards `/api/*` here, so the game calls a single origin.
 
 ```text
 browser ──> longjump.ing (Cloudflare) ──static──> dist/
@@ -15,6 +15,17 @@ browser ──> longjump.ing (Cloudflare) ──static──> dist/
 4. The server checks the physics version and map-content version, replays the jump with the same `physics.ts` and the map's collision boxes, and stores the distance it computed. The result must be valid, start grounded at rest height, begin on the takeoff tick and end on the final command.
 
 Each name keeps one best per tick rate. The board is the top 100 across maps, optionally filtered by tick rate. Replays are stored for later review.
+
+## Rooms
+
+Practice → **Create room** gives an invite link (`longjump.ing/#room=abcd2345`). Opening it joins the room after choosing a name. Leaderboard and rooms use the same name. Rooms hold up to 8 players and share one map; when anyone changes maps, everyone follows. Empty rooms end after 10 minutes. Reloading rejoins from the link.
+
+Rooms run over a WebSocket at `/api/rooms` through the same Cloudflare proxy. The first message carries the name key, never the URL. The server assigns names, checks the physics version, and relays two things:
+
+- **Poses** (position, velocity, view, grounded, crouch, reset marker), about 20 per second per client. Each 50 ms snapshot contains only changed poses. Excess or malformed poses are dropped, and a client that falls behind skips snapshots instead of queuing them.
+- **Jump announcements** for valid jumps, at most 4 per second. These are client-reported and appear only in the in-game feed. The leaderboard still accepts only replayed jumps.
+
+Movement stays local, with no player collisions. Other players appear as capsules with name labels, drawn about 100 ms behind live and interpolated between snapshots. Resets and map changes snap instead of sliding. State lives in memory; a server restart drops rooms, and clients reconnect with backoff.
 
 ## Run locally
 
@@ -39,6 +50,7 @@ Vite proxies `/api/*` to port 8787 (or `LONGJUMP_API`). `ALLOW_DIRECT=1` lets th
 | `GET /api/players/me` | Bearer key; name, banned flag and posted bests |
 | `POST /api/players/me` | Bearer key, `name`; renames |
 | `POST /api/jumps` | Bearer key, `replay`; returns verified distance, rank and whether it improved |
+| `GET /api/rooms` (WebSocket) | `hello` with key and physics version, then `pose`, `jump`, `map` messages |
 | `/api/admin/*` | `ADMIN_TOKEN` bearer: list entries, delete entries, rename and ban players |
 
 Names use 3–16 letters, numbers or underscores. Uniqueness ignores case, underscores and look-alikes, so `Y0der_ing` collides with `yodering`. Reserved and offensive names are refused. Banned names vanish from the board and cannot post.
@@ -68,6 +80,6 @@ Physics or map changes alter the version hashes. Clients and the server must dep
 ## Verification
 
 ```sh
-bun test tests/replay.test.ts tests/leaderboard.test.ts
+bun test tests/replay.test.ts tests/leaderboard.test.ts tests/rooms.test.ts
 bun run build
 ```

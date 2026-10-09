@@ -361,9 +361,11 @@ body.playing .jump-details { display: none; }
 .leaderboard-name small, .leaderboard-score small { color: var(--neutral-7); font: var(--weight-data-regular) var(--size-xs)/var(--line-xs) var(--font-data); letter-spacing: var(--letter-spacing-xs); }
 .leaderboard-row.own .leaderboard-name { font-weight: var(--weight-ui-medium); }
 .leaderboard-row .jump-metrics { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-.leaderboard-prompt { box-sizing: border-box; width: 208px; padding: var(--space-s); border-radius: var(--radius-s); background: var(--neutral-2); box-shadow: var(--border-shadow-s), var(--shadow-s); transition: opacity var(--motion-duration) var(--motion-easing), transform var(--motion-duration) var(--motion-easing); }
+.leaderboard-prompt { box-sizing: border-box; width: 288px; padding: var(--space-m); border-radius: var(--radius-s); background: var(--neutral-2); box-shadow: var(--border-shadow-s), var(--shadow-s); transition: opacity var(--motion-duration) var(--motion-easing), transform var(--motion-duration) var(--motion-easing); }
 @starting-style { .leaderboard-prompt { opacity: 0; transform: translateY(calc(-1 * var(--space-xs))); } }
-body.playing .leaderboard-prompt { display: none; }
+/* During play the keyboard belongs to the game, so the prompt shows how to reach the form. */
+.leaderboard-prompt-hint, body.playing .leaderboard-prompt form { display: none; }
+body.playing .leaderboard-prompt-hint { display: block; margin: 0; }
 .leaderboard-prompt>p:first-child { margin: 0 0 var(--space-s); color: var(--neutral-10); font: var(--weight-ui-medium) var(--size-s)/var(--line-s) var(--font-ui); letter-spacing: var(--letter-spacing-s); text-wrap: pretty; }
 .leaderboard-prompt .history-toolbar { flex-wrap: wrap; margin-bottom: var(--space-zero); }
 .leaderboard-prompt .history-toolbar input { flex-basis: 100%; }
@@ -374,3 +376,13 @@ body.playing .leaderboard-prompt { display: none; }
 .corner-stack .jump-panel { position: static; min-height: 0; }
 @media(max-width:700px) { .corner-stack { right: var(--space-m); } }
 @media(prefers-reduced-motion:reduce) { .leaderboard-prompt { transition: none; } }
+
+/* Rooms sit under the practice profile and reuse its row and the shared name form. */
+.room-panel { margin-top: var(--space-s); }
+.room-row { flex-wrap: wrap; gap: var(--space-s); }
+.room-row>span { font-variant-numeric: tabular-nums; }
+.room-panel form { margin: var(--space-s) 0 0; }
+.room-panel [data-room=status] { margin: var(--space-s) 0 0; }
+.room-players { display: flex; flex-wrap: wrap; gap: var(--space-xs) var(--space-m); list-style: none; margin: var(--space-s) 0 0; padding: 0; color: var(--neutral-10); font: var(--weight-ui-regular) var(--size-xs)/var(--line-xs) var(--font-ui); letter-spacing: var(--letter-spacing-xs); }
+.room-players:empty { display: none; }
+.room-players small { color: var(--neutral-7); font: inherit; }

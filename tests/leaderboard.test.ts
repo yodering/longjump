@@ -184,6 +184,12 @@ test('Cloudflare proxy forwards only /api with its own trusted headers', async (
     assert.equal(sent.headers.get('X-Longjump-Proxy'), env.PROXY_SECRET);
     assert.equal(sent.headers.get('X-Longjump-Client-IP'), '203.0.113.7');
     assert.equal(sent.headers.get('Authorization'), 'Bearer k');
+    // Room WebSocket upgrades go straight through with the proxy's trusted headers.
+    const upgraded = new Response('upgraded');
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => { seen.push(new Request(input, init)); return upgraded; }) as typeof fetch;
+    assert.equal(await proxy(new Request('https://longjump.ing/api/rooms', { headers: { Upgrade: 'websocket', 'CF-Connecting-IP': '203.0.113.8', 'X-Longjump-Proxy': 'forged' } }), env), upgraded);
+    assert.equal(seen.at(-1)!.headers.get('X-Longjump-Proxy'), env.PROXY_SECRET);
+    assert.equal(seen.at(-1)!.headers.get('X-Longjump-Client-IP'), '203.0.113.8');
     assert.equal((await proxy(new Request('https://longjump.ing/api/leaderboard'), { ASSETS: assets })).status, 503);
     globalThis.fetch = (async () => { throw new Error('down'); }) as unknown as typeof fetch;
     const down = await proxy(new Request('https://longjump.ing/api/leaderboard'), env);

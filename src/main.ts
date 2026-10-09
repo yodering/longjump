@@ -11,6 +11,11 @@ import { HistoryArchive } from './history-archive';
 import { HistoryPanel } from './history-panel';
 import { LeaderboardPanel } from './leaderboard-panel';
 import { JumpRecorder } from './replay';
+import { Identity } from './identity';
+import { RoomClient, type RoomJump } from './room';
+import { RoomPanel } from './room-panel';
+import { RemotePlayers } from './remote-players';
+import { escapeHtml } from './html';
 import { fingerprint, readCheckpoints, checkpointForMap, type SavedPosition } from './backup';
 import { normalizeSettings } from './settings';
 import { tokenLabel, type Action } from './bindings';
@@ -55,6 +60,7 @@ app.innerHTML = `
       <section id="practice-tab" class="tab-content">
         <div class="checkpoint-help"><span><kbd data-bind-label="save"></kbd> Save position</span><span><kbd data-bind-label="return"></kbd> Return</span><span><kbd data-bind-label="reset"></kbd> Reset</span></div>
         <div class="profile-row"><span>Vanilla</span><button id="tick-toggle">${settings.tickRate} tick <i data-lucide="arrow-left-right" aria-hidden="true"></i></button></div>
+        <div id="room-panel" class="room-panel"></div>
       </section>
       <section id="maps-tab" class="tab-content" hidden>
         <div class="map-options">${maps.map(m => `<button data-map="${m.id}" aria-pressed="false"><b>${m.name}</b><small>${m.detail}</small></button>`).join('')}</div>
@@ -173,7 +179,27 @@ function applyPreferences() {
   writeSettings();
 }
 const settingsPanel = new SettingsPanel($('settings-tab'), settings, applyPreferences);
-const leaderboard = new LeaderboardPanel($('leaderboard-tab'), $('leaderboard-prompt'), message => toast(message));
+const identity = new Identity();
+const leaderboard = new LeaderboardPanel($('leaderboard-tab'), $('leaderboard-prompt'), identity, message => toast(message));
+// Rooms relay poses and announcements only; local movement never waits on them.
+const remote = new RemotePlayers(); world.scene.add(remote.group);
+// Assigned below; the panel can trigger room events while it is being created (invite links).
+let roomPanel: RoomPanel | undefined;
+const room = new RoomClient(identity, import.meta.env.VITE_PHYSICS_VERSION ?? '', {
+  changed: () => { remote.sync(room.players, room.you); roomPanel?.render(); if (!room.code) remote.clear(); },
+  poses: (at, players) => remote.receive(at, players, performance.now()),
+  joined: name => feedLine(`<p><span class="kz-tag">${escapeHtml(name)}</span> joined the room</p>`),
+  left: name => feedLine(`<p><span class="kz-tag">${escapeHtml(name)}</span> left the room</p>`),
+  jump: announceJump,
+  map: (id, by) => {
+    remote.forgetPositions();
+    // The feed survives map loads, so room lines that arrive mid-load stay visible.
+    if (by) feedLine(`<p><span class="kz-tag">${escapeHtml(by)}</span> switched to ${escapeHtml(maps.find(m => m.id === id)?.name ?? id)}</p>`);
+    if (id !== settings.mapId && maps.some(m => m.id === id)) void changeMap(id as MapId);
+  },
+  error: message => { roomPanel?.error(message); toast(message); },
+});
+roomPanel = new RoomPanel($('room-panel'), identity, room, () => settings.mapId);
 applyPreferences();
 function updateStatsPanel() {
   $('jump-panel').hidden = !settings.jumpStats;
@@ -199,7 +225,6 @@ function clearResult() {
   for (const id of ['distance', 'pre-speed', 'max-speed', 'strafes', 'sync', 'edge', 'height', 'air-ticks', 'overlap', 'dead-air', 'jump-width', 'exact-distance']) $(id).textContent = '—';
   $('distance').classList.remove('miss'); $('result-status').textContent = 'READY'; $('result-status').classList.remove('failed');
   $('last-note').textContent = 'Jump to record stats.'; $('strafe-table').querySelector('tbody')!.replaceChildren(); $('strafe-table').hidden = true;
-  $('kz-chat').replaceChildren();
   drawPath([], false); world.disposeGroup(world.trail);
 }
 function reset(toEntry = false) {
@@ -208,6 +233,7 @@ function reset(toEntry = false) {
   world.viewmodel.resetMotion();
   if (toEntry) world.viewmodel.play('draw');
   controls.clearPulses(); jumpUsedLJ = false; jumpBlock = 0;
+  room.reset();
 }
 async function changeMap(id: MapId) {
   if (loadingMap) return;
@@ -228,18 +254,26 @@ async function changeMap(id: MapId) {
     $('menu-map').textContent = info.name;
     $('start').querySelector('span')!.textContent = 'Play';
     loadingMap = false; reset(true); clearResult(); writeSettings(); updateSession();
+    remote.forgetPositions(); room.changeMap(id);
     engagement.configure(playContext()); engagement.mapLoaded();
     $('start-note').textContent = READY_NOTE;
   } catch (error) { console.error(error); settings.mapId = previous; $('start-note').textContent = 'Map could not load. Choose a map to retry.'; }
   finally { loadingMap = false; $<HTMLButtonElement>('start').disabled = false; document.querySelectorAll<HTMLButtonElement>('[data-map]').forEach(b => b.disabled = false); }
 }
 function toast(message: string) { $('toast').textContent = message; $('toast').classList.add('visible'); clearTimeout(toastTimeout); toastTimeout = window.setTimeout(() => $('toast').classList.remove('visible'), 2200); }
-function chat(result: Result) {
+function feedLine(markup: string) {
   const line = document.createElement('div');
-  line.innerHTML = jumpFeedMarkup(result);
+  line.innerHTML = markup;
   const feed = $('kz-chat');
   feed.append(line);
   while (feed.children.length > 4) feed.firstElementChild!.remove();
+}
+function chat(result: Result) { feedLine(jumpFeedMarkup(result)); }
+// Room announcements are client-reported practice results, shown with the sender's tick rate.
+function announceJump(jump: RoomJump) {
+  feedLine(jumpFeedMarkup({ distance: jump.distance, valid: true, landed: true, strafes: { length: jump.strafes }, sync: jump.sync, preSpeed: jump.pre,
+    maxSpeed: jump.max, edge: jump.edge, height: jump.height, ticks: jump.ticks, overlap: jump.overlap, deadAir: jump.deadAir, width: jump.width },
+    `${escapeHtml(jump.name)} · ${jump.tick}T${jump.auto ? ' · AUTO' : ''}`));
 }
 function showResult(result: Result) {
   engagement.jumpCompleted(result);
@@ -250,6 +284,7 @@ function showResult(result: Result) {
   if (updatedRecords !== records) { records = updatedRecords; writeRecords(); }
   $('history-count').textContent = String(Number($('history-count').textContent) + 1);
   void archive.append(entry, records);
+  if (result.valid) room.jump(result, settings.tickRate, settings.autoBhop);
   const replay = recorder.current();
   // Auto-hop jumps never count on the leaderboard.
   if (replay && !settings.autoBhop) leaderboard.submit(result, { ...replay, tickRate: settings.tickRate, mapId: settings.mapId,
@@ -443,10 +478,12 @@ function frame(_frameTimestamp: number) {
       movement.step(input);
       if (belowMap(classic, movement.position)) { fallTime += 1 / movement.tickRate; if (fallTime > 0.32) { reset(); sounds.play('checkpoint'); } } else fallTime = 0;
     });
+    remote.update(now, world.camera);
     world.play(movement.renderEye(commands.alpha, commands.preview(now)), yaw, pitch, dt, view());
     updateHUD();
-  } else if (!started && !settingsPreview) world.preview(now / 1000);
-  else world.play(movement.eye(1), yaw, pitch, dt, view());
+  } else if (!started && !settingsPreview) { remote.update(now, world.camera); world.preview(now / 1000); }
+  else { remote.update(now, world.camera); world.play(movement.eye(1), yaw, pitch, dt, view()); }
+  room.pose(now, movement.position, movement.velocity, yaw, pitch, movement.grounded, movement.duckAmount);
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

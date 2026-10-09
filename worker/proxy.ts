@@ -15,8 +15,13 @@ export async function proxy(request: Request, env: Env): Promise<Response> {
   headers.set('X-Longjump-Proxy', env.PROXY_SECRET);
   const address = request.headers.get('CF-Connecting-IP');
   if (address) headers.set('X-Longjump-Client-IP', address);
+  const target = new URL(url.pathname + url.search, env.API_URL);
+  // Room WebSockets pass straight through; Cloudflare relays frames without running this Worker per message.
+  if (request.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
+    try { return await fetch(target, { headers }); } catch { return unavailable(); }
+  }
   try {
-    const response = await fetch(new URL(url.pathname + url.search, env.API_URL), {
+    const response = await fetch(target, {
       method: request.method, headers, body: request.body, redirect: 'manual',
     });
     return new Response(response.body, response);
