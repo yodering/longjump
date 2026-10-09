@@ -233,3 +233,18 @@ test('Half-strength press and subsequent held strafe count as one strafe', () =>
   m.step({ ...idle, jump: true, side: 0.5 }); m.step({ ...idle, side: 1 });
   assert.equal(m.jump?.strafes.length, 1);
 });
+
+for (const tickRate of [64, 128] as const) {
+  test(`${tickRate}t: render prediction removes the old camera delay without changing movement or jump stats`, () => {
+    const m = new Movement(); m.tickRate = tickRate; flat(m);
+    for (let i = 0; i < tickRate; i++) m.step({ ...idle, forward: 1 });
+    const before = JSON.stringify(m);
+    assert.deepEqual(m.renderEye(0), m.eye(1));
+    assert.ok(m.renderEye(0.5).y > m.eye(1).y);
+    assert.ok(m.eye(0.5).y < m.eye(1).y);
+    assert.equal(JSON.stringify(m), before);
+    m.boxes.push({ id: 'wall', min: { x: -100, y: m.position.y + 16.5, z: 0 }, max: { x: 100, y: m.position.y + 100, z: 200 } });
+    assert.ok(m.renderEye(1).y <= m.position.y + 0.5);
+    assert.equal(m.grounded, true);
+  });
+}

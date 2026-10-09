@@ -7,6 +7,8 @@ import { mapEntry, mapLanes, blockAt, belowMap, CONCRETE_GAP, type Position } fr
 import { Sounds } from './sounds';
 import { soundTiers, jumpSound, type Sound } from './sound-tiers';
 import { readHistory, readBests, saveBest, sameCategory, type Entry } from './history';
+import { HistoryArchive } from './history-archive';
+import { HistoryPanel } from './history-panel';
 import { normalizeSettings } from './settings';
 import { tokenLabel, type Action } from './bindings';
 import { Commands, PITCH_LIMIT, lockMouse } from './commands';
@@ -23,10 +25,12 @@ const engagement = new Engagement(loadAnalytics(), playContext());
 window.setInterval(() => engagement.flush(), 30_000);
 window.addEventListener('pagehide', () => engagement.setPlaying(false));
 document.documentElement.dataset.mode = settings.appearance;
-let history = readHistory(read<unknown>('vnl-history', []));
-let records = readBests(read<unknown>('vnl-bests', []), history);
-const category = (ljBind = false) => ({ mapId: settings.mapId, tickRate: settings.tickRate, autoBhop: settings.autoBhop, ljBind });
-const best = (ljBind = false) => records.find(record => sameCategory(record, category(ljBind)))?.distance ?? 0;
+const legacyHistory = readHistory(read<unknown>('vnl-history', []));
+const archive = new HistoryArchive(legacyHistory);
+let historyPanel: HistoryPanel | undefined;
+let records = readBests(read<unknown>('vnl-bests', []), legacyHistory);
+const category = () => ({ mapId: settings.mapId, tickRate: settings.tickRate, autoBhop: settings.autoBhop });
+const best = () => records.find(record => sameCategory(record, category()))?.distance ?? 0;
 function writeRecords() { try { localStorage.setItem('vnl-bests', JSON.stringify(records)); } catch { /* Keep records in memory when storage is unavailable. */ } }
 writeRecords();
 const app = document.querySelector<HTMLDivElement>('#app')!;
@@ -62,7 +66,7 @@ app.innerHTML = `
         <details class="sound-samples"><summary>Sound samples</summary><div>${soundTiers.map(t => `<button data-sample="${t.name}">${t.label} <small>${t.distance}+</small></button>`).join('')}<button data-sample="checkpoint">Checkpoint beep</button><button data-sample="error">Error beep</button></div><p class="setting-note">GOKZ vanilla long-jump defaults.</p></details>
         <p id="mouse-scale-note" class="setting-note"></p>
       </section>
-      <section id="session-tab" class="tab-content" hidden><div id="session-list"></div></section>
+      <section id="session-tab" class="tab-content" hidden><div id="personal-bests"></div><div id="history-browser"></div></section>
       <button id="start" class="start-button"><i data-lucide="play" aria-hidden="true"></i><span>Play</span></button>
       <div id="start-note" class="start-note">Click Play or press Esc to capture the mouse.</div>
     </div>
@@ -130,7 +134,7 @@ const playGuard = new PlayGuard(window, (navigator as Navigator & { keyboard?: {
 const controls = commands.live;
 let yaw = 0, pitch = 0, locked = false, started = false, settingsPreview = false, jumpUsedLJ = false;
 let checkpoint: Position | null = null;
-let lastTime = performance.now(), uiTime = 0, fallTime = 0, toastTimeout = 0;
+let lastTime = performance.now(), fallTime = 0, toastTimeout = 0;
 let plotPath: Vec[] = [], plotLanded = false;
 const sounds = new Sounds(); sounds.enabled = settings.sound; sounds.volume = settings.volume;
 const writeSettings = () => { try { localStorage.setItem('vnl-settings', JSON.stringify(settings)); } catch { /* Private mode can disallow storage. */ } };
@@ -166,14 +170,13 @@ function toggleStatsPanel() {
   settings.jumpStats = !settings.jumpStats; updateStatsPanel(); writeSettings();
 }
 function updateSession() {
-  $('history-count').textContent = String(history.length);
   const pb = best(); $('pb').textContent = pb ? pb.toFixed(2) : '—'; $('pb-tick').textContent = `${settings.tickRate}T${settings.autoBhop ? ' · AUTO' : ''}`;
-  const ljBest = best(true);
-  $('hud-pb').hidden = !pb && !ljBest; $('hud-pb').textContent = [pb ? `PB: ${pb.toFixed(2)}` : '', ljBest ? `LJ bind PB: ${ljBest.toFixed(2)}` : '', `${settings.tickRate}T${settings.autoBhop ? ' · AUTO' : ''}`].filter(Boolean).join(' · ');
+  $('hud-pb').hidden = !pb; $('hud-pb').textContent = `PB: ${pb.toFixed(2)} · ${settings.tickRate}T${settings.autoBhop ? ' · AUTO' : ''}`;
   const currentRecords = records.filter(j => j.mapId === settings.mapId && j.tickRate === settings.tickRate);
-  const mode = (j: Entry) => `${j.autoBhop === undefined ? 'LEGACY' : j.autoBhop ? 'AUTO-HOP' : 'MANUAL'}${j.ljBind ? ' · LJ BIND' : ''}`;
+  const mode = (j: Entry) => `${j.autoBhop === undefined ? 'LEGACY' : j.autoBhop ? 'AUTO-HOP' : 'MANUAL'}`;
   const bestMarkup = `<div class="session-heading">PERSONAL BESTS <span>${settings.tickRate}T</span></div>${currentRecords.length ? currentRecords.map(j => `<div class="session-entry"><div><b>${j.distance.toFixed(2)}</b><small>${mode(j)} · ${Number.isFinite(j.at) ? new Date(j.at).toLocaleDateString() : 'Earlier session'}</small></div><span>${j.sync.toFixed(0)}% <small>${j.strafes.length} STRAFES</small></span></div>`).join('') : '<p class="setting-note">No best for this map and tick rate yet.</p>'}`;
-  $('session-list').innerHTML = bestMarkup + (history.length ? `<div class="session-heading">RECENT JUMPS <span>DIST / SYNC</span></div>${history.slice(0, 5).map(j => `<div class="session-entry"><div><b class="${j.valid ? '' : 'failed'}">${j.distance.toFixed(2)}</b><small>${j.valid ? 'LONG JUMP' : 'MISS'} · ${j.tickRate}T · ${mode(j)}</small></div><span>${j.sync.toFixed(0)}% <small>${j.strafes.length} STRAFES</small></span></div>`).join('')}<p class="setting-note">Saved in this browser. Bests stay after recent attempts roll off.</p>` : '<div class="empty-session"><p>No jumps recorded.</p><small>Complete a jump to see your stats.</small></div>');
+  $('personal-bests').innerHTML = bestMarkup;
+
 }
 function clearResult() {
   for (const id of ['distance', 'pre-speed', 'max-speed', 'strafes', 'sync', 'edge', 'height', 'air-ticks', 'overlap', 'dead-air', 'jump-width', 'exact-distance']) $(id).textContent = '—';
@@ -220,12 +223,12 @@ function chat(result: Result) {
 }
 function showResult(result: Result) {
   engagement.jumpCompleted(result);
-  const previousBest = best(jumpUsedLJ);
+  const previousBest = best();
   const entry: Entry = { ...result, path: result.path.map(p => ({ ...p })), at: Date.now(), mapId: settings.mapId, tickRate: settings.tickRate, gap: jumpBlock, ljBind: jumpUsedLJ, autoBhop: settings.autoBhop };
   const updatedRecords = saveBest(records, entry);
   if (updatedRecords !== records) { records = updatedRecords; writeRecords(); }
-  history.unshift(entry); history = history.slice(0, 100);
-  try { localStorage.setItem('vnl-history', JSON.stringify(history)); } catch { /* Keep session in memory. */ }
+  $('history-count').textContent = String(Number($('history-count').textContent) + 1);
+  void archive.append(entry);
   $('distance').textContent = result.distance.toFixed(2); $('distance').classList.toggle('miss', !result.valid);
   $('result-status').textContent = result.valid ? 'LANDED' : result.landed ? 'INVALID' : 'MISS'; $('result-status').classList.toggle('failed', !result.valid);
   $('pre-speed').textContent = result.preSpeed.toFixed(1); $('max-speed').textContent = result.maxSpeed.toFixed(1);
@@ -354,10 +357,11 @@ document.addEventListener('auxclick', event => { if (locked) event.preventDefaul
 $('team').addEventListener('change', () => { settings.team = $<HTMLSelectElement>('team').value === 't' ? 't' : 'ct'; void world.viewmodel.setTeam(settings.team); writeSettings(); });
 void world.viewmodel.setTeam(settings.team);
 for (const name of ['jumpStats', 'sound', 'trail', 'viewmodel', 'leftHand'] as const) $(name).addEventListener('change', () => { settings[name] = $<HTMLInputElement>(name).checked; if (name === 'jumpStats') updateStatsPanel(); if (name === 'sound') sounds.enabled = settings.sound; if (name === 'trail') { if (settings.trail && movement.result) world.showTrail(movement.result.path); else world.disposeGroup(world.trail); } writeSettings(); });
-document.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach(button => button.addEventListener('click', () => { settingsPanel.cancelCapture(); settingsPreview = button.dataset.tab === 'settings'; document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('active', b === button)); for (const name of ['practice', 'maps', 'settings', 'session']) $(`${name}-tab`).hidden = name !== button.dataset.tab; }));
+document.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach(button => button.addEventListener('click', () => { settingsPanel.cancelCapture(); settingsPreview = button.dataset.tab === 'settings'; document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('active', b === button)); for (const name of ['practice', 'maps', 'settings', 'session']) $(`${name}-tab`).hidden = name !== button.dataset.tab; if (button.dataset.tab === 'session') void historyPanel?.refresh(); }));
 $('fullscreen').addEventListener('click', async () => { try { if (document.fullscreenElement) await document.exitFullscreen(); else await document.documentElement.requestFullscreen(); } catch { toast('Fullscreen is unavailable in this browser'); } });
 $('about-button').addEventListener('click', () => $<HTMLDialogElement>('about').showModal());
 $('close-about').addEventListener('click', () => $<HTMLDialogElement>('about').close());
+historyPanel = new HistoryPanel($('history-browser'), archive, count => { $('history-count').textContent = String(Math.max(Number($('history-count').textContent), count)); }, () => records);
 updateSession(); createIcons({ icons: { ArrowLeftRight }, attrs: { 'aria-hidden': 'true' } });
 function updateHUD() {
   const sp = speed(movement.velocity); $('speed').textContent = String(Math.round(sp));
@@ -379,8 +383,8 @@ function frame(now: number) {
       movement.step(input);
       if (belowMap(classic, movement.position)) { fallTime += 1 / movement.tickRate; if (fallTime > 0.32) { reset(); sounds.play('checkpoint'); } } else fallTime = 0;
     });
-    world.play(movement.eye(commands.alpha), yaw, pitch, dt, view());
-    if (now - uiTime > 40) { updateHUD(); uiTime = now; }
+    world.play(movement.renderEye(commands.alpha), yaw, pitch, dt, view());
+    updateHUD();
   } else if (!started && !settingsPreview) world.preview(now / 1000);
   else world.play(movement.eye(1), yaw, pitch, dt, view());
   requestAnimationFrame(frame);

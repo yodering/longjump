@@ -9,11 +9,11 @@ export function readHistory(value: unknown): Entry[] {
   return value.filter((entry): entry is Entry => entry !== null && typeof entry === 'object'
     && Number.isFinite(entry.distance) && Number.isFinite(entry.sync)
     && (entry.tickRate === 64 || entry.tickRate === 128)
-    && typeof entry.valid === 'boolean' && Array.isArray(entry.strafes)).slice(0, 100);
+    && typeof entry.valid === 'boolean' && Array.isArray(entry.strafes));
 }
 
-export function sameCategory(a: Pick<Entry, 'mapId' | 'tickRate' | 'autoBhop' | 'ljBind'>, b: Pick<Entry, 'mapId' | 'tickRate' | 'autoBhop' | 'ljBind'>) {
-  return a.mapId === b.mapId && a.tickRate === b.tickRate && a.autoBhop === b.autoBhop && !!a.ljBind === !!b.ljBind;
+export function sameCategory(a: Pick<Entry, 'mapId' | 'tickRate' | 'autoBhop'>, b: Pick<Entry, 'mapId' | 'tickRate' | 'autoBhop'>) {
+  return a.mapId === b.mapId && a.tickRate === b.tickRate && a.autoBhop === b.autoBhop;
 }
 
 // Store records separately from the capped recent history so a PB never ages out.

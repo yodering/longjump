@@ -94,6 +94,17 @@ export class Movement {
     const offset = this.previousViewOffset + (this.viewOffset - this.previousViewOffset) * t;
     return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t + offset };
   }
+  // Render ahead from the latest completed command instead of a tick behind it.
+  // This is visual prediction only: traces keep the camera out of solid geometry,
+  // and the authoritative movement, jump measurements and input ticks never change.
+  renderEye(alpha: number): Vec {
+    const dt = clamp01(alpha) * this.dt, p = this.position, v = this.velocity;
+    if (!dt || (this.grounded && !v.x && !v.y && !v.z)) return this.eye(1);
+    const target = { x: p.x + v.x * dt, y: p.y + v.y * dt,
+      z: p.z + v.z * dt - (this.grounded ? 0 : RULES.gravity * dt * dt / 2) };
+    const end = this.trace(p, target).end;
+    return { x: end.x, y: end.y, z: end.z + this.viewOffset };
+  }
   // Swept player hull against axis-aligned boxes (Minkowski sum + slab test), with the engine's DIST_EPSILON pull-back.
   trace(start: Vec, end: Vec, height = this.hullHeight): Trace {
     const d = { x: end.x - start.x, y: end.y - start.y, z: end.z - start.z };
