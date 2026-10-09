@@ -314,13 +314,13 @@
   "outputs": [
     {
       "path": "public/players/player_ct.glb",
-      "bytes": 3748524,
-      "sha256": "5391439b4de462607bd237681084f23b25f5030ff6ebd4aca41108332623193a"
+      "bytes": 3702548,
+      "sha256": "83e98ea0aea96ece702eb8d0e0693aab591926911d1dc7ff9d4d1b40bb714bd0"
     },
     {
       "path": "public/players/player_t.glb",
-      "bytes": 3968044,
-      "sha256": "a5c4047c8bc4351da353c5ad3adafbd1a60375fbb2f80c7997be077544c78e40"
+      "bytes": 3933716,
+      "sha256": "d4c19876d73b544e21eb476182ca48081b91498f05ae8b170effbe7394292b3c"
     }
   ]
 }

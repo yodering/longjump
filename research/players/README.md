@@ -20,7 +20,7 @@ pip install pillow vpk
 python scripts/import_players.py csgo-depot/csgo/pak01_dir.vpk public/players
 ```
 
-[provenance.json](provenance.json) records the SHA-256 of every source file the importer reads and of both outputs. The conversion is deterministic.
+[provenance.json](provenance.json) records the SHA-256 of every source file the importer reads and of both outputs. The conversion is deterministic. The current outputs had the empty-normal fix applied to their existing 512 px normal JPEGs rather than a fresh import, so a re-import differs slightly at island edges.
 
 ## Conversion
 
@@ -32,6 +32,7 @@ python scripts/import_players.py csgo-depot/csgo/pak01_dir.vpk public/players
   - **Aim:** the aim grid's ends (yaw ±60°, pitch ±90°, standing and crouched) as `aim_up/down/left/right` and `crouch_aim_*`.
   - **Lean:** the four leans as `lean_n/e/s/w`.
   - **Idle fidget:** `alive`, the idle pose breaker. It's a delta animation, applied like Source's `QuaternionSM` (rotation = delta^w × base, position = base + w × delta). All directions in a set are resampled to one length so they loop together. Each clip's ground speed comes from its animation's movement record and is stored in the scene extras.
+- **Empty normal texels.** The ST6 and Phoenix body normal maps leave large regions as all-zero DXT blocks that the body UVs still use (about 40% of the CT lower body's triangles and 80% of the T body's). A zero texel decodes to z ≤ 0, which is no valid tangent-space normal: it lit trousers and jackets from behind, so they glowed pale against the map. The importer writes every texel with blue below 128 as flat (128, 128, 255), before resizing so the empty space cannot bleed into the islands.
 - **Size.** Tracks that never move are dropped. Unchanging tracks become one key, and rotations are stored as normalized 16-bit quaternions. Colour textures are capped at 1024 px and normal maps at 512 px. Packed phong masks are 256 px. Each GLB is about 3.8 MB.
 
 ## Runtime

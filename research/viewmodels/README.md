@@ -21,7 +21,7 @@ pip install pillow vpk
 python scripts/import_viewmodels.py csgo-depot/csgo/pak01_dir.vpk public/viewmodels
 ```
 
-Manifest `1224088799001669801` (12 Oct 2023) is the final CS:GO build. [provenance.json](provenance.json) records the SHA-256 of every source file read from the VPK and of the two outputs.
+Manifest `1224088799001669801` (12 Oct 2023) is the final CS:GO build. [provenance.json](provenance.json) records the SHA-256 of every source file read from the VPK and of the two outputs. The current outputs had the empty-normal fix below applied to their existing normal JPEGs rather than a fresh import.
 
 ## Conversion
 
@@ -30,7 +30,7 @@ Manifest `1224088799001669801` (12 Oct 2023) is the final CS:GO build. [provenan
 - The knife models carry no animations. They include `v_ct_knife_anim.mdl` / `v_t_knife_anim.mdl`, whose sequences are CS:GO `STUDIO_FRAMEANIM` data (frame × bone, `Quaternion48`/`Quaternion48S`/`Vector48`) in `.ani` blocks, split into 30-frame sections.
 - The arms are separate models that Source bone-merges onto the knife skeleton by name. The GLB has one skeleton: knife bones, plus the arm-only bones (clavicles, upper arms) in the arms' idle pose under their parents. Each model keeps its own inverse bind matrices.
 - Exported sequences: `draw`, `idle1`, `idle2`, `lookat01` (inspect), `light_miss1`, `light_miss2`, `heavy_miss1`.
-- Each material keeps its base texture and normal map (JPEG; normal-map green flipped from DirectX to glTF convention), plus a PNG mask texture: R = phong mask (base alpha with `$basemapalphaphongmask`, otherwise normal-map alpha), G/B/A = the `$phongexponenttexture` red (exponent), green (albedo tint) and alpha (rim mask). The VMT constants that `phong_dx9_helper.cpp` derives (`$phongboost`, `$phongalbedoboost`, `$phongfresnelranges`, `$phongexponent`, `$phongtint`, `$rimlight*`, `$rimmask`) are stored in the material's `extras.source`.
+- Each material keeps its base texture and normal map (JPEG; normal-map green flipped from DirectX to glTF convention, and texels with no valid normal (blue below 128, from empty DXT blocks) written flat), plus a PNG mask texture: R = phong mask (base alpha with `$basemapalphaphongmask`, otherwise normal-map alpha), G/B/A = the `$phongexponenttexture` red (exponent), green (albedo tint) and alpha (rim mask). The VMT constants that `phong_dx9_helper.cpp` derives (`$phongboost`, `$phongalbedoboost`, `$phongfresnelranges`, `$phongexponent`, `$phongtint`, `$rimlight*`, `$rimmask`) are stored in the material's `extras.source`.
 - Env maps are omitted; their tints on these materials are about 0.01. The bare arm's `character` shader (specular warp and fresnel-ranges textures) is approximated with the phong model and its `masks1` rim and albedo masks.
 - Triangle winding is chosen from the authored vertex normals, and Source axes (x forward, z up) are rotated to glTF's on the root node.
 

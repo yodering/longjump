@@ -204,13 +204,13 @@
   "outputs": [
     {
       "path": "public/viewmodels/knife_ct.glb",
-      "bytes": 5277736,
-      "sha256": "ebc362af9d9c4130d977585638d0e9fb2a4b41bf08bfe0c3f90c0640df306468"
+      "bytes": 5270852,
+      "sha256": "93eb11d5faab61f12e773ce66eede9ccd65012c349f000cd9940b7ad61f95376"
     },
     {
       "path": "public/viewmodels/knife_t.glb",
-      "bytes": 3472128,
-      "sha256": "fba8310e86dcadd149f8a9da76a4bfbb5e3452b76929c4d93438d61767bf20c2"
+      "bytes": 3464760,
+      "sha256": "a4b12728987ca7840ba0365c43185361a29a54ff31209d2c1d1b90945b546b78"
     }
   ]
 }
