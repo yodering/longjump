@@ -361,7 +361,16 @@ body.playing .jump-details { display: none; }
 .leaderboard-name small, .leaderboard-score small { color: var(--neutral-7); font: var(--weight-data-regular) var(--size-xs)/var(--line-xs) var(--font-data); letter-spacing: var(--letter-spacing-xs); }
 .leaderboard-row.own .leaderboard-name { font-weight: var(--weight-ui-medium); }
 .leaderboard-row .jump-metrics { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-.leaderboard-prompt { padding: var(--space-m); margin-bottom: var(--space-m); border-radius: var(--radius-s); background: var(--neutral-3); }
+.leaderboard-prompt { box-sizing: border-box; width: 208px; padding: var(--space-s); border-radius: var(--radius-s); background: var(--neutral-2); box-shadow: var(--border-shadow-s), var(--shadow-s); transition: opacity var(--motion-duration) var(--motion-easing), transform var(--motion-duration) var(--motion-easing); }
+@starting-style { .leaderboard-prompt { opacity: 0; transform: translateY(calc(-1 * var(--space-xs))); } }
+body.playing .leaderboard-prompt { display: none; }
 .leaderboard-prompt>p:first-child { margin: 0 0 var(--space-s); color: var(--neutral-10); font: var(--weight-ui-medium) var(--size-s)/var(--line-s) var(--font-ui); letter-spacing: var(--letter-spacing-s); text-wrap: pretty; }
-.leaderboard-prompt .history-toolbar { margin-bottom: var(--space-zero); }
+.leaderboard-prompt .history-toolbar { flex-wrap: wrap; margin-bottom: var(--space-zero); }
+.leaderboard-prompt .history-toolbar input { flex-basis: 100%; }
 .leaderboard-prompt .setting-note { margin: var(--space-s) 0 0; }
+/* The leaderboard prompt and jump stats share the corner under the top bar. */
+.corner-stack { position: fixed; top: 64px; right: var(--space-l); display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-xs); max-height: calc(100dvh - 88px); pointer-events: none; }
+.corner-stack>* { pointer-events: auto; }
+.corner-stack .jump-panel { position: static; min-height: 0; }
+@media(max-width:700px) { .corner-stack { right: var(--space-m); } }
+@media(prefers-reduced-motion:reduce) { .leaderboard-prompt { transition: none; } }

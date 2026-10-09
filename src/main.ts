@@ -51,7 +51,6 @@ app.innerHTML = `
       <h1>longjump</h1>
       <p class="description">cs:go long jump practice</p>
       <div class="current-map"><span>Map</span><strong id="menu-map">Loading…</strong></div>
-      <section id="leaderboard-prompt" class="leaderboard-prompt" aria-label="Post to the leaderboard" hidden></section>
       <nav class="tabs" aria-label="Practice menu"><button data-tab="practice" class="active">Practice</button><button data-tab="maps">Maps</button><button data-tab="settings">Settings</button><button data-tab="session">History <span id="history-count">0</span></button><button data-tab="leaderboard">Leaderboard</button></nav>
       <section id="practice-tab" class="tab-content">
         <div class="checkpoint-help"><span><kbd data-bind-label="save"></kbd> Save position</span><span><kbd data-bind-label="return"></kbd> Return</span><span><kbd data-bind-label="reset"></kbd> Reset</span></div>
@@ -80,6 +79,8 @@ app.innerHTML = `
     </div>
     <footer class="menu-footer"><span>Made by <a href="https://twitter.com/yodering" target="_blank" rel="noreferrer">@yodering</a></span><button id="about-button" aria-label="About movement and maps">About</button></footer>
   </main>
+    <div class="corner-stack">
+    <section id="leaderboard-prompt" class="leaderboard-prompt" aria-label="Post to the leaderboard" hidden></section>
     <aside id="jump-panel" class="jump-panel" hidden>
       <div class="panel-label">LAST JUMP <span id="result-status">READY</span></div>
       <div class="distance"><span id="distance">—</span><small>UNITS</small></div>
@@ -92,6 +93,7 @@ app.innerHTML = `
       <div id="last-note" class="last-note">Jump to record stats.</div>
       </details>
     </aside>
+    </div>
   <div id="hud" hidden>
     <div id="crosshair" class="cs-crosshair"><i></i><i></i><i></i><i></i><b></b></div>
     <div class="info-panel" aria-live="off"><div>Speed: <b id="speed">0</b> <span id="takeoff-speed"></span></div><div>Keys: <span id="keys">_ _ _ _ _ _</span></div><div id="hud-pb" class="hud-pb" hidden></div></div>

@@ -150,6 +150,7 @@ export class LeaderboardPanel {
     if (!result.valid) return;
     if (!this.player) {
       if (result.distance <= (this.pending.get(replay.tickRate)?.result.distance ?? 0)) return;
+      // The open prompt updates in place; Not now keeps it closed for the session.
       this.pending.set(replay.tickRate, { result, replay }); this.render();
       if (!this.dismissed && !this.hinted) { this.hinted = true; this.notify('Add a name to post on the leaderboard? Press Esc'); }
       return;
