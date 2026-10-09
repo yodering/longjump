@@ -1,6 +1,6 @@
 # Account-service prototype
 
-Local prototype for username/password accounts and private attempt/PB storage. The public game still serves static assets. This config lives under `worker/` so the current dashboard deployment does not publish the account API accidentally.
+Local prototype for username/password accounts and private attempt/PB storage. The public game uses the root static-assets Wrangler config. This separate config lives under `worker/` so the current dashboard deployment does not publish the account API accidentally.
 
 ## Run locally
 
