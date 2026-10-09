@@ -38,7 +38,7 @@ test('Alternate bindings release independently and pause clears held, blocked an
 });
 
 for (const tickRate of [64, 128]) {
-  test(`${tickRate}t: consecutive scroll commands can bhop, but stopping scroll never auto-hops`, () => {
+  test(`${tickRate}t: consecutive scroll commands cannot rearm manual bhops`, () => {
     const controls = new Controls(normalizeBindings(null));
     const movement = new Movement(); movement.tickRate = tickRate;
     movement.boxes = [{ id: 'floor', min: { x: -2000, y: -2000, z: -100 }, max: { x: 2000, y: 2000, z: 0 } }];
@@ -48,10 +48,12 @@ for (const tickRate of [64, 128]) {
       controls.pulse('WheelDown'); movement.step(controls.tick(0));
       if (grounded && !movement.grounded) takeoffs++;
     }
-    assert.ok(takeoffs >= 3, `Expected repeated manual hops, got ${takeoffs}`);
+    assert.equal(takeoffs, 1);
     for (let i = 0; i < tickRate * 2; i++) movement.step(controls.tick(0));
     assert.equal(movement.grounded, true);
     assert.equal(movement.autoBhop, false);
+    controls.pulse('WheelDown'); movement.step(controls.tick(0));
+    assert.equal(movement.grounded, false);
   });
   test(`${tickRate}t: an airborne scroll does not buffer a hop and scrolling under held Space does not rearm it`, () => {
     const controls = new Controls(normalizeBindings(null));
@@ -67,6 +69,9 @@ for (const tickRate of [64, 128]) {
     }
     assert.equal(movement.grounded, true);
     controls.up('Space'); controls.down('Space'); movement.step(controls.tick(0));
+    assert.equal(movement.grounded, true);
+    controls.up('Space'); movement.step(controls.tick(0));
+    controls.down('Space'); movement.step(controls.tick(0));
     assert.equal(movement.grounded, false);
   });
 }

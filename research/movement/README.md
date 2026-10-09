@@ -40,7 +40,22 @@ Physics tests also cover jump height and distance, stamina and deadstrafe orderi
 
 The browser check verified map loading and the cleaned-up menus. The in-app browser rejected both raw and standard pointer lock with Chromium's `UnknownError`, so it could not provide a mouse-controlled playtest. Fallback behavior is covered by the unit tests.
 
-Remaining differences include double-precision arithmetic, axis-aligned collision, browser input timing, approximate camera prediction, and incomplete GOKZ statistics. Source's crouch-stuck recovery and quadrant ground traces are also absent. Hard-fall roll, fall damage, footsteps and surface-dependent landing sounds are not implemented. Slopes, ladders, water, moving platforms and non-default surface physics remain outside the controller. Consecutive wheel pulses explicitly rearm manual jumping here; that browser behavior still needs comparison with native command button flags. A claim of exact or near-perfect parity needs game-recorded command/state traces and a side-by-side playtest.
+Remaining differences include double-precision arithmetic, axis-aligned collision, browser input timing, approximate camera prediction, and incomplete GOKZ statistics. Source's crouch-stuck recovery and quadrant ground traces are also absent. Hard-fall roll, fall damage, footsteps and surface-dependent landing sounds are not implemented. Slopes, ladders, water, moving platforms and non-default surface physics remain outside the controller. Consecutive wheel pulses previously rearmed manual jumping; the manual-bhop follow-up below corrects that behavior. A claim of exact or near-perfect parity needs game-recorded command/state traces and a side-by-side playtest.
+
+### Manual-bhop follow-up: 9 October 2026
+
+Every wheel pulse previously cleared `jumpHeld`, bypassing the previous-command button check. Scrolling on every tick therefore guaranteed another jump on the first grounded command. Manual jumping now rearms only after a command without jump. A release/repress between adjacent jump commands also stays blocked, including in camera prediction. Explicit auto-bhop still bypasses the held-button gate.
+
+The pinned CS:GO `CheckJumpButton` above blocks `m_nOldButtons & IN_JUMP`; `FullWalkMove` clears that bit on commands without jump. This agrees with [zer0.k's analysis of CS:GO jump timing](https://github.com/zer0k-z/cs2-movement-issue-bhop#how-it-worked-in-csgo) and its [scroll-rate derivation](https://github.com/zer0k-z/cs2-movement-issue-bhop/blob/main/appendix.md). A perfect hop requires jump on the first grounded command and no jump on the preceding command.
+
+| Server rate | Perfect-hop window | Ideal periodic scroll spacing | Perfect rate at ideal spacing | Perfect rate at 16 ms spacing |
+| --- | --- | --- | --- | --- |
+| 64 tick | 15.625 ms | 31.25 ms | 50% | 2.34% |
+| 128 tick | 7.8125 ms | 15.625 ms | 50% | 48.83% |
+
+These are timing-model rates for evenly spaced scrolling with uniformly distributed landing phases, not measured player averages or a random success roll. With scroll gap `G` and tick length `t`, let `T = G / t`. The perfect rate is zero below one tick, `1 - 1/T` between one and two ticks, and `1/T` at two ticks or more. A deliberately timed single press can succeed whenever it hits the right command with jump released on the previous one; 50% is not a universal limit on individual attempts.
+
+Command tests sweep 600 phases for each of six scroll spacings at both tick rates, using actual landing physics. They check first-command takeoffs and speed retention against the timing model. Separate checks cover early taps, late jumps, consecutive wheel commands, same-tick keyboard release/repress, and prediction. Native CS:GO command captures are still needed to validate browser event delivery against the game.
 
 ## Next fidelity work
 

@@ -4,6 +4,57 @@ import { Commands, lockMouse, type UserCommand } from '../src/commands.ts';
 import { Controls, normalizeBindings } from '../src/bindings.ts';
 import { Movement, speed } from '../src/physics.ts';
 
+for (const tickRate of [64, 128] as const) {
+  test(`${tickRate}t: manual scroll perf rates follow tick timing across landing phases`, () => {
+    const interval = 1000 / tickRate, samples = 600;
+    // Uniform scroll phases around a landing, not a random failure chance.
+    for (const gap of [interval / 2, interval, interval * 1.5, interval * 2, interval * 3, 16]) {
+      let perfs = 0;
+      for (let sample = 0; sample < samples; sample++) {
+        const m = new Movement(); m.tickRate = tickRate;
+        m.boxes = [{ id: 'floor', min: { x: -2000, y: -2000, z: -100 }, max: { x: 2000, y: 2000, z: 0 } }];
+        m.reset({ x: 0, y: 0, z: 1 }); m.grounded = false;
+        m.velocity = { x: 0, y: 270, z: -100 };
+        const c = new Commands(normalizeBindings(null)); c.reset(0, 0);
+        for (let at = (sample + 0.5) / samples * gap; at < interval * 2; at += gap) {
+          c.button('pulse', 'WheelDown', at);
+        }
+        c.advance(interval, tickRate, input => m.step(input));
+        assert.equal(m.grounded, true); assert.equal(m.jump, null);
+        c.advance(interval * 2, tickRate, input => m.step(input));
+        if (!m.grounded) {
+          perfs++;
+          assert.ok(m.jump!.preSpeed > 269, 'perfect hops retain landing speed');
+        } else {
+          assert.ok(speed(m.velocity) < 250, 'misses incur ground friction and the speed cap');
+        }
+      }
+      const ticks = gap / interval;
+      const expected = ticks < 1 ? 0 : ticks <= 2 ? 1 - 1 / ticks : 1 / ticks;
+      assert.ok(Math.abs(perfs / samples - expected) <= 1 / samples,
+        `${gap}ms scroll: ${perfs}/${samples} perfs, expected ${expected * 100}%`);
+    }
+  });
+
+  test(`${tickRate}t: only the first grounded command preserves a manual hop's speed`, () => {
+    for (const jumpTick of [1, 2, 3]) {
+      const m = new Movement(); m.tickRate = tickRate;
+      m.reset({ x: 0, y: -240, z: 1 }); m.grounded = false;
+      m.velocity = { x: 0, y: 270, z: -100 };
+      const c = new Commands(normalizeBindings(null)); c.reset(0, 0);
+      const interval = 1000 / tickRate;
+      c.button('pulse', 'WheelDown', (jumpTick - 0.5) * interval);
+      c.advance(interval * 3, tickRate, input => m.step(input));
+      if (jumpTick === 1) {
+        assert.equal(m.jump, null); assert.equal(m.grounded, true);
+      } else {
+        assert.ok(m.jump);
+        assert.equal(m.jump.preSpeed > 269, jumpTick === 2);
+      }
+    }
+  });
+}
+
 test('Source key fractions distinguish press, hold, release, tap and re-press', () => {
   const c = new Controls(normalizeBindings(null));
   c.down('KeyD'); assert.equal(c.tick(0).side, 0.5);

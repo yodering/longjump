@@ -240,9 +240,8 @@ export class Movement {
   private fullWalkMove(input: Input) {
     const v = this.velocity, half = RULES.gravity * this.dt / 2;
     v.z -= half; // StartGravity
-    // A wheel notch or a new key press is a fresh tap even when the previous command also jumped.
-    // It is consumed on this command only; airborne taps never queue a jump for landing.
-    if (input.jumpPressed) this.jumpHeld = false;
+    // Source rearms manual jumping only after a command without IN_JUMP.
+    // Wheel pulses and release/repress events within a tick cannot bypass that gate.
     if (input.jump) this.checkJumpButton(input); else this.jumpHeld = false;
     if (this.grounded) { v.z = 0; this.fallVelocity = 0; this.friction(); }
     this.checkVelocity();
