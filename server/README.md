@@ -65,7 +65,7 @@ The same script takes `delete <entry id>`, `ban <player id>`, `unban <player id>
 
 ## Deployment
 
-[`railway.json`](../railway.json) builds with Railpack and type-checks the server. It starts `bun server/main.ts` and checks `/healthz`. It runs one replica because SQLite lives on one volume. Migrations apply at startup.
+Railway no longer reads [`railway.json`](../railway.json) (config as code is deprecated), so the same values are set on the service itself: build command `bunx tsc --project server/tsconfig.json`, start command `bun server/main.ts`, healthcheck `/healthz`. Without the start command, Railpack detects Vite and serves the static game instead, and `/api/*` returns HTML. It runs one replica because SQLite lives on one volume. Migrations apply at startup.
 
 | Railway variable | Value |
 | --- | --- |

@@ -66,18 +66,7 @@ app.innerHTML = `
         <div class="map-options">${maps.map(m => `<button data-map="${m.id}" aria-pressed="false"><b>${m.name}</b><small>${m.detail}</small></button>`).join('')}</div>
         <div id="map-credit" class="map-credit"></div>
       </section>
-      <section id="settings-tab" class="tab-content" hidden>
-        <label class="setting-range" for="sensitivity">Mouse sensitivity <output id="sensitivity-output">${settings.sensitivity}</output></label><input id="sensitivity" type="number" min="0.01" max="20" step="0.01" value="${settings.sensitivity}"/>
-        <label class="toggle-row">Jump stats panel <input id="jumpStats" type="checkbox" ${settings.jumpStats ? 'checked' : ''}/></label>
-        <label class="toggle-row">Viewmodel <input id="viewmodel" type="checkbox" ${settings.viewmodel ? 'checked' : ''}/></label>
-        <label class="toggle-row">Knife <select id="team"><option value="ct" ${settings.team === 'ct' ? 'selected' : ''}>CT default</option><option value="t" ${settings.team === 't' ? 'selected' : ''}>T default</option></select></label>
-        <label class="toggle-row">Left-handed viewmodel <input id="leftHand" type="checkbox" ${settings.leftHand ? 'checked' : ''}/></label>
-        <label class="toggle-row">Last-jump trail <input id="trail" type="checkbox" ${settings.trail ? 'checked' : ''}/></label>
-        <label class="toggle-row">KZ sounds <input id="sound" type="checkbox" ${settings.sound ? 'checked' : ''}/></label>
-        <label class="setting-range" for="volume">Sound volume <output id="volume-output">${Math.round(settings.volume * 100)}%</output></label><input id="volume" type="range" min="0" max="1" step="0.05" value="${settings.volume}"/>
-        <details class="sound-samples"><summary>Sound samples</summary><div>${soundTiers.map(t => `<button data-sample="${t.name}">${t.label} <small>${t.distance}+</small></button>`).join('')}<button data-sample="checkpoint">Checkpoint beep</button><button data-sample="error">Error beep</button></div><p class="setting-note">Practice long-jump thresholds.</p></details>
-        <p id="mouse-scale-note" class="setting-note"></p>
-      </section>
+      <section id="settings-tab" class="tab-content" hidden></section>
       <section id="session-tab" class="tab-content" hidden><div id="personal-bests"></div><div id="history-browser"></div></section>
       <section id="leaderboard-tab" class="tab-content" hidden></section>
       <button id="start" class="start-button"><i data-lucide="play" aria-hidden="true"></i><span>Play</span></button>
@@ -104,9 +93,9 @@ app.innerHTML = `
     <div id="crosshair" class="cs-crosshair"><i></i><i></i><i></i><i></i><b></b></div>
     <div id="crosshair-speed" class="crosshair-speed" aria-hidden="true"><span id="crosshair-speed-now">0.00</span><span id="crosshair-speed-pre"></span></div>
     <div id="spectate-banner" class="spectate-banner" hidden></div>
-    <div class="info-panel" aria-live="off"><div>Speed: <b id="speed">0</b> <span id="takeoff-speed"></span></div><div>Keys: <span id="keys">_ _ _ _ _ _</span></div><div id="hud-pb" class="hud-pb" hidden></div></div>
+    <div id="info-panel" class="info-panel" aria-live="off"><div id="info-speed">Speed: <b id="speed">0</b> <span id="takeoff-speed"></span></div><div id="info-keys">Keys: <span id="keys">_ _ _ _ _ _</span></div><div id="info-pb" class="hud-pb" hidden></div></div>
     <div id="kz-chat" class="kz-chat" aria-live="polite"></div>
-    <div class="play-controls"><span><kbd data-bind-label="reset"></kbd> RESET</span><span><kbd data-bind-label="save"></kbd> SAVE</span><span><kbd data-bind-label="return"></kbd> RETURN</span><button id="fullscreen" aria-label="Toggle fullscreen"><i data-lucide="maximize" aria-hidden="true"></i></button></div>
+    <div class="play-controls"><span data-hint><kbd data-bind-label="reset"></kbd> RESET</span><span data-hint><kbd data-bind-label="save"></kbd> SAVE</span><span data-hint><kbd data-bind-label="return"></kbd> RETURN</span><button id="fullscreen" aria-label="Toggle fullscreen"><i data-lucide="maximize" aria-hidden="true"></i></button></div>
     <div id="toast" role="status"></div>
   </div>
   <dialog id="about" aria-labelledby="about-title">
@@ -170,21 +159,17 @@ function applyPreferences() {
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', getComputedStyle(document.documentElement).getPropertyValue('--neutral-1').trim());
   if (plotPath.length) drawPath(plotPath, plotLanded);
   controls.bindings = settings.bindings; controls.nullBind = settings.nullBind; controls.clear(); commands.reset(performance.now(), yaw);
-  remote.group.visible = settings.showPlayers; $('crosshair-speed').hidden = !settings.crosshairSpeed; roomPanel?.render();
+  remote.group.visible = settings.showPlayers; roomPanel?.render();
   world.configureDisplay(settings); world.viewmodel.configure(settings.view);
   if (world.viewmodel.team !== settings.team) void world.viewmodel.setTeam(settings.team);
   sounds.enabled = settings.sound; sounds.volume = settings.volume;
-  for (const name of ['jumpStats', 'sound', 'trail', 'viewmodel', 'leftHand'] as const) $<HTMLInputElement>(name).checked = settings[name];
-  $<HTMLSelectElement>('team').value = settings.team;
-  $<HTMLInputElement>('sensitivity').value = String(settings.sensitivity); $('sensitivity-output').textContent = String(settings.sensitivity);
-  $<HTMLInputElement>('volume').value = String(settings.volume); $('volume-output').textContent = `${Math.round(settings.volume * 100)}%`;
-  $('mouse-scale-note').textContent = `Mouse scale: sensitivity × ${settings.mouseYaw}° horizontally / ${settings.mousePitch}° vertically per pixel.`;
   document.querySelectorAll<HTMLElement>('[data-bind-label]').forEach(el => el.textContent = settings.bindings[el.dataset.bindLabel as Action][0] ? tokenLabel(settings.bindings[el.dataset.bindLabel as Action][0]) : '—');
   updateStatsPanel(); updateSession();
   if (!settings.trail) world.disposeGroup(world.trail);
+  else if (!world.trail.children.length && movement.result) world.showTrail(movement.result.path);
   writeSettings();
 }
-const settingsPanel = new SettingsPanel($('settings-tab'), settings, applyPreferences);
+const settingsPanel = new SettingsPanel($('settings-tab'), settings, applyPreferences, () => previewHud());
 const identity = new Identity();
 const leaderboard = new LeaderboardPanel($('leaderboard-tab'), $('leaderboard-prompt'), identity, message => toast(message));
 // Rooms relay poses and announcements only; local movement never waits on them.
@@ -227,7 +212,8 @@ function toggleStatsPanel() {
 }
 function updateSession() {
   const pb = best(); $('pb').textContent = pb ? pb.toFixed(2) : '—'; $('pb-tick').textContent = `${settings.tickRate}T${settings.autoBhop ? ' · AUTO' : ''}`;
-  $('hud-pb').hidden = !pb; $('hud-pb').textContent = `PB: ${pb.toFixed(2)} · ${settings.tickRate}T${settings.autoBhop ? ' · AUTO' : ''}`;
+  $('info-pb').hidden = !pb || !settings.hud.pb; $('info-pb').textContent = `PB: ${pb.toFixed(2)} · ${settings.tickRate}T${settings.autoBhop ? ' · AUTO' : ''}`;
+  layoutHud();
   const currentRecords = records.filter(j => j.mapId === settings.mapId && j.tickRate === settings.tickRate);
   const mode = (j: Entry) => j.autoBhop === undefined ? 'Legacy' : j.autoBhop ? 'Auto-hop' : 'Manual';
   const selected = currentRecords.find(j => j.autoBhop === settings.autoBhop);
@@ -236,6 +222,16 @@ function updateSession() {
   $('personal-bests').innerHTML = bestMarkup;
 
 }
+function layoutHud() {
+  const { hud } = settings, bottom = hud.speed === 'bottom' || hud.speed === 'both';
+  $('crosshair-speed').hidden = !(hud.speed === 'crosshair' || hud.speed === 'both');
+  $('info-speed').hidden = !bottom; $('info-keys').hidden = !hud.keys;
+  $('info-panel').hidden = !bottom && !hud.keys && $('info-pb').hidden;
+  document.querySelectorAll<HTMLElement>('[data-hint]').forEach(hint => hint.hidden = !hud.hints);
+}
+// The HUD and Crosshair settings pages show the real HUD over the live view behind the menu.
+const hudPreview = () => settingsPreview && !locked && (settingsPanel.page === 'hud' || settingsPanel.page === 'crosshair');
+function previewHud() { if (!locked) $('hud').hidden = !hudPreview(); }
 function clearResult() {
   for (const id of ['distance', 'pre-speed', 'max-speed', 'strafes', 'sync', 'edge', 'height', 'air-ticks', 'overlap', 'dead-air', 'jump-width', 'exact-distance']) $(id).textContent = '—';
   $('distance').classList.remove('miss'); $('result-status').textContent = 'READY'; $('result-status').classList.remove('failed');
@@ -343,7 +339,7 @@ function setLocked(value: boolean) {
   else void playGuard.capture(false);
   engagement.setPlaying(value && !document.hidden);
   locked = value; controls.clear(); settingsPanel.cancelCapture(); lastTime = performance.now(); commands.reset(lastTime, yaw); movement.jumpHeld = false;
-  $('menu').hidden = value; $('hud').hidden = !value; $('menu-button').hidden = !value;
+  $('menu').hidden = value; $('hud').hidden = !value; $('menu-button').hidden = !value; previewHud();
   if (value) $<HTMLDetailsElement>('jump-details').open = false;
   document.body.classList.toggle('playing', value);
   $('start').querySelector('span')!.textContent = started ? 'Resume' : 'Play';
@@ -449,19 +445,11 @@ $('stats-toggle').addEventListener('click', toggleStatsPanel);
 $('menu-button').addEventListener('click', () => { playGuard.setPlaying(false, false); if (locked) document.exitPointerLock(); });
 document.querySelectorAll<HTMLButtonElement>('[data-map]').forEach(button => button.addEventListener('click', () => void changeMap(button.dataset.map as MapId)));
 $('tick-toggle').addEventListener('click', () => { settings.tickRate = settings.tickRate === 128 ? 64 : 128; engagement.configure(playContext()); movement.tickRate = settings.tickRate; reset(); $('tick-toggle').innerHTML = `${settings.tickRate} tick <i data-lucide="arrow-left-right" aria-hidden="true"></i>`; createIcons({ icons: { ArrowLeftRight }, attrs: { 'aria-hidden': 'true' } }); writeSettings(); updateSession(); });
-$('volume').addEventListener('input', () => { settings.volume = Number($<HTMLInputElement>('volume').value); sounds.volume = settings.volume; $('volume-output').textContent = `${Math.round(settings.volume * 100)}%`; writeSettings(); });
 document.querySelectorAll<HTMLButtonElement>('[data-sample]').forEach(button => button.addEventListener('click', async () => { try { await sounds.unlock(); sounds.play(button.dataset.sample as Sound, true); } catch (error) { console.error(error); $('start-note').textContent = 'Sound files could not load.'; } }));
-$('sensitivity').addEventListener('change', () => {
-  const n = Number($<HTMLInputElement>('sensitivity').value);
-  settings.sensitivity = Number.isFinite(n) && n > 0 ? Math.min(20, Math.max(0.01, n)) : settings.sensitivity;
-  applyPreferences();
-});
 document.addEventListener('contextmenu', event => { if (locked || !$('settings-tab').hidden) event.preventDefault(); });
 document.addEventListener('auxclick', event => { if (locked) event.preventDefault(); });
-$('team').addEventListener('change', () => { settings.team = $<HTMLSelectElement>('team').value === 't' ? 't' : 'ct'; void world.viewmodel.setTeam(settings.team); writeSettings(); });
 void world.viewmodel.setTeam(settings.team);
-for (const name of ['jumpStats', 'sound', 'trail', 'viewmodel', 'leftHand'] as const) $(name).addEventListener('change', () => { settings[name] = $<HTMLInputElement>(name).checked; if (name === 'jumpStats') updateStatsPanel(); if (name === 'sound') sounds.enabled = settings.sound; if (name === 'trail') { if (settings.trail && movement.result) world.showTrail(movement.result.path); else world.disposeGroup(world.trail); } writeSettings(); });
-document.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach(button => button.addEventListener('click', () => { settingsPanel.cancelCapture(); settingsPreview = button.dataset.tab === 'settings'; document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('active', b === button)); for (const name of ['practice', 'maps', 'settings', 'session', 'leaderboard']) $(`${name}-tab`).hidden = name !== button.dataset.tab; if (button.dataset.tab === 'session') void historyPanel?.refresh(); if (button.dataset.tab === 'leaderboard') void leaderboard.refresh(); }));
+document.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach(button => button.addEventListener('click', () => { settingsPanel.cancelCapture(); settingsPreview = button.dataset.tab === 'settings'; document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('active', b === button)); for (const name of ['practice', 'maps', 'settings', 'session', 'leaderboard']) $(`${name}-tab`).hidden = name !== button.dataset.tab; previewHud(); if (button.dataset.tab === 'session') void historyPanel?.refresh(); if (button.dataset.tab === 'leaderboard') void leaderboard.refresh(); }));
 $('fullscreen').addEventListener('click', async () => { try { if (document.fullscreenElement) await document.exitFullscreen(); else await document.documentElement.requestFullscreen(); } catch { toast('Fullscreen is unavailable in this browser'); } });
 $('about-button').addEventListener('click', () => $<HTMLDialogElement>('about').showModal());
 $('close-about').addEventListener('click', () => $<HTMLDialogElement>('about').close());
@@ -492,12 +480,12 @@ historyPanel = new HistoryPanel($('history-browser'), archive, count => { $('his
 });
 void archive.bests().then(saved => { records = readBests([...records, ...saved]); writeRecords(); updateSession(); }).catch(() => {});
 updateSession(); createIcons({ icons: { ArrowLeftRight }, attrs: { 'aria-hidden': 'true' } });
-function updateHUD(target: SpectatorView | null) {
-  const sp = speed(target ? target.velocity : movement.velocity), takeoff = target ? target.takeoff : movement.jump?.preSpeed ?? null;
-  $('speed').textContent = String(Math.round(sp));
-  $('takeoff-speed').textContent = takeoff === null ? '' : `(${Math.round(takeoff)})`;
-  $('crosshair-speed-now').textContent = sp.toFixed(2);
-  $('crosshair-speed-pre').textContent = takeoff === null ? '' : `(${takeoff.toFixed(2)})`;
+function updateHUD(target: SpectatorView | null, sample = false) {
+  // The settings preview shows a typical airborne reading so every speed option is visible.
+  const sp = sample ? 250 : speed(target ? target.velocity : movement.velocity), takeoff = sample ? 272.35 : target ? target.takeoff : movement.jump?.preSpeed ?? null;
+  const { decimals, takeoff: showTakeoff } = settings.hud, pre = showTakeoff && takeoff !== null ? `(${takeoff.toFixed(decimals)})` : '';
+  $('speed').textContent = sp.toFixed(decimals); $('takeoff-speed').textContent = pre;
+  $('crosshair-speed-now').textContent = sp.toFixed(decimals); $('crosshair-speed-pre').textContent = pre;
   // A watched player's keys are not sent, only their movement.
   if (target) { $('keys').textContent = '— — — — — —'; return; }
   const input = controls.snapshot(yaw);
@@ -539,7 +527,7 @@ function frame(_frameTimestamp: number) {
     world.play(movement.renderEye(commands.alpha, commands.preview(now)), yaw, pitch, dt, view());
     updateHUD(null);
   } else if (!started && !settingsPreview) { remote.update(now, world.camera, lightAt); world.preview(now / 1000); }
-  else { remote.update(now, world.camera, lightAt); world.play(movement.eye(1), yaw, pitch, dt, view()); }
+  else { remote.update(now, world.camera, lightAt); world.play(movement.eye(1), yaw, pitch, dt, view()); if (hudPreview()) updateHUD(null, true); }
   room.pose(now, movement.position, movement.velocity, yaw, pitch, movement.grounded, movement.duckAmount, settings.team, !!spectating);
   requestAnimationFrame(frame);
 }

@@ -30,7 +30,8 @@ for (const tickRate of [64, 128] as const) {
         }
       }
       const ticks = gap / interval;
-      const expected = ticks < 1 ? 0 : ticks <= 2 ? 1 - 1 / ticks : 1 / ticks;
+      // Any notch in the first grounded command hops, even if the landing command also had one.
+      const expected = Math.min(1, 1 / ticks);
       assert.ok(Math.abs(perfs / samples - expected) <= 1 / samples,
         `${gap}ms scroll: ${perfs}/${samples} perfs, expected ${expected * 100}%`);
     }
