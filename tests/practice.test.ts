@@ -39,7 +39,12 @@ test('Concrete has fixed gaps and an entrance on its connecting walkway', () => 
   assert.equal(belowMap(null, { x: 0, y: 0, z: -181 }), true);
 });
 test('GOKZ voice tiers use exact thresholds and only one highest-tier clip', () => {
-  assert.equal(jumpSound(234.99, true), null);
+  assert.equal(jumpSound(229.99, true), null);
+  assert.equal(jumpSound(240, true), 'godlike');
+  assert.equal(jumpSound(242.99, true), 'godlike');
+  assert.equal(jumpSound(243, true), 'ownage');
+  assert.equal(jumpSound(245.99, true), 'ownage');
+  assert.equal(jumpSound(246, true), 'wrecker');
   for (let i = 0; i < soundTiers.length; i++) {
     const tier = soundTiers[i]; assert.equal(jumpSound(tier.distance, true), tier.name);
     assert.equal(jumpSound(tier.distance - 0.001, true), i ? soundTiers[i - 1].name : null);

@@ -14,6 +14,7 @@ import { SettingsPanel } from './settings-panel';
 import { jumpFeedMarkup } from './jump-feed';
 import { Engagement } from './engagement';
 import { loadAnalytics } from './analytics';
+import { PlayGuard } from './play-guard';
 
 function read<T>(key: string, fallback: T): T { try { return JSON.parse(localStorage.getItem(key) || 'null') ?? fallback; } catch { return fallback; } }
 const settings = normalizeSettings(read<unknown>('vnl-settings', {}));
@@ -60,7 +61,7 @@ app.innerHTML = `
       <button id="start" class="start-button"><i data-lucide="play" aria-hidden="true"></i><span>Play</span></button>
       <div id="start-note" class="start-note">Click Play to capture the mouse.</div>
     </div>
-    <footer class="menu-footer"><span>Esc to pause</span><button id="about-button" aria-label="About movement and maps">About</button></footer>
+    <footer class="menu-footer"><span>Made by <a href="https://twitter.com/yodering" target="_blank" rel="noreferrer">@yodering</a></span><button id="about-button" aria-label="About movement and maps">About</button></footer>
   </main>
     <aside id="jump-panel" class="jump-panel" hidden>
       <div class="panel-label">LAST JUMP <span id="result-status">READY</span></div>
@@ -121,6 +122,7 @@ let jumpBlock = 0;
 try { world = new World($('world'), CONCRETE_GAP); }
 catch { $('start').setAttribute('disabled', ''); $('start-note').textContent = 'WebGL is unavailable. Enable hardware acceleration and reload.'; throw new Error('WebGL renderer unavailable'); }
 const commands = new Commands(settings.bindings);
+const playGuard = new PlayGuard(window, (navigator as Navigator & { keyboard?: { lock: (keys: string[]) => Promise<void>; unlock: () => void } }).keyboard);
 const controls = commands.live;
 let yaw = 0, pitch = 0, locked = false, started = false, settingsPreview = false, jumpUsedLJ = false;
 let checkpoint: Position | null = null;
@@ -175,7 +177,8 @@ function clearResult() {
 function reset(toEntry = false) {
   const pose = !toEntry && checkpoint ? checkpoint : mapEntry(classic);
   movement.reset(pose.position); yaw = pose.yaw; pitch = pose.pitch; commands.reset(performance.now(), yaw); fallTime = 0;
-  world.viewmodel.play('draw');
+  world.viewmodel.resetMotion();
+  if (toEntry) world.viewmodel.play('draw');
   controls.clearPulses(); jumpUsedLJ = false; jumpBlock = 0;
 }
 async function changeMap(id: MapId) {
@@ -247,6 +250,10 @@ function drawPath(path: Vec[], landed: boolean) {
   for (const [i, p] of path.entries()) { const x = 25 + (p.y - minY) * scale, y = 70 + (p.x - (minX + maxX) / 2) * scale; if (i === 0) c.moveTo(x, y); else c.lineTo(x, y); } c.stroke();
 }
 function setLocked(value: boolean) {
+  // Closing can blur the tab before beforeunload. Keep confirmation armed
+  // until focus returns or the player explicitly pauses.
+  if (value || document.hasFocus()) playGuard.setPlaying(value, !!document.fullscreenElement);
+  else void playGuard.capture(false);
   engagement.setPlaying(value && !document.hidden);
   locked = value; controls.clear(); settingsPanel.cancelCapture(); lastTime = performance.now(); commands.reset(lastTime, yaw); movement.jumpHeld = false;
   $('menu').hidden = value; $('hud').hidden = !value; $('menu-button').hidden = !value;
@@ -286,6 +293,7 @@ function runAction(action: Action | undefined) {
 document.addEventListener('keydown', event => {
   if (settingsPanel.captureToken(event.code)) { event.preventDefault(); return; }
   if (!locked) return;
+  if (event.code === 'Escape') playGuard.setPlaying(false, false);
   if (controls.action(event.code) || ['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(event.code)) event.preventDefault();
   if (!event.repeat) runAction(commands.button('down', event.code, event.timeStamp));
 });
@@ -303,9 +311,11 @@ document.addEventListener('wheel', event => {
   if (locked) { event.preventDefault(); runAction(commands.button('pulse', token, event.timeStamp)); }
 }, { passive: false });
 addEventListener('blur', () => { controls.clear(); commands.reset(performance.now(), yaw); settingsPanel.cancelCapture(); if (locked) document.exitPointerLock(); });
+addEventListener('focus', () => { if (!locked) playGuard.setPlaying(false, false); });
+document.addEventListener('fullscreenchange', () => { void playGuard.capture(locked && !!document.fullscreenElement); });
 document.addEventListener('visibilitychange', () => { engagement.setPlaying(locked && !document.hidden); if (document.hidden) { controls.clear(); if (locked) document.exitPointerLock(); } lastTime = performance.now(); commands.reset(lastTime, yaw); });
 $('stats-toggle').addEventListener('click', toggleStatsPanel);
-$('menu-button').addEventListener('click', () => { if (locked) document.exitPointerLock(); });
+$('menu-button').addEventListener('click', () => { playGuard.setPlaying(false, false); if (locked) document.exitPointerLock(); });
 document.querySelectorAll<HTMLButtonElement>('[data-map]').forEach(button => button.addEventListener('click', () => void changeMap(button.dataset.map as MapId)));
 $('tick-toggle').addEventListener('click', () => { settings.tickRate = settings.tickRate === 128 ? 64 : 128; engagement.configure(playContext()); movement.tickRate = settings.tickRate; reset(); $('tick-toggle').innerHTML = `${settings.tickRate} tick <i data-lucide="arrow-left-right" aria-hidden="true"></i>`; createIcons({ icons: { ArrowLeftRight }, attrs: { 'aria-hidden': 'true' } }); writeSettings(); updateSession(); });
 $('volume').addEventListener('input', () => { settings.volume = Number($<HTMLInputElement>('volume').value); sounds.volume = settings.volume; $('volume-output').textContent = `${Math.round(settings.volume * 100)}%`; writeSettings(); });

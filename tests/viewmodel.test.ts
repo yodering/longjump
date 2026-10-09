@@ -39,3 +39,15 @@ test('Interrupted knife actions keep only one animation completion listener', ()
   assert.equal(listeners.size, 0);
   assert.equal(mixer.existingAction(clips.get('idle1')!)?.isRunning(), true);
 });
+
+test('Reset clears viewmodel motion from a moving, turned pose before rendering the spawn', () => {
+  Object.assign(globalThis, { innerWidth: 1280, innerHeight: 800 });
+  const model = new Viewmodel(), fresh = new Viewmodel();
+  const state = { speed: 250, grounded: true, yaw: 1.5, pitch: 0.4, dt: 1 / 60, leftHand: false };
+  for (let i = 0; i < 60; i++) model.update(state);
+  model.resetMotion();
+  const spawn = { ...state, speed: 0, yaw: 0, pitch: 0 };
+  model.update(spawn); fresh.update(spawn);
+  assert.deepEqual(model.root.children[0].position.toArray(), fresh.root.children[0].position.toArray());
+  assert.deepEqual(model.root.children[0].quaternion.toArray(), fresh.root.children[0].quaternion.toArray());
+});

@@ -118,6 +118,8 @@ export class Viewmodel {
     this.camera.updateProjectionMatrix();
   }
   configure(settings: ViewSettings) { this.settings = { ...settings }; this.resize(this.camera.aspect); }
+  // Teleports have no continuous velocity or facing history to trail behind.
+  resetMotion() { this.bobTime = 0; this.lastSpeed = 0; this.lastFacing = null; }
   // CBaseViewModel::CalcViewModelView with CS:GO's CalcViewModelBobHelper / AddViewModelBobHelper and CalcViewModelLag.
   // yaw/pitch are the game's (radians, positive yaw turns right, positive pitch looks up); speed is horizontal.
   update({ speed, grounded, yaw, pitch, dt, leftHand }: ViewState) {

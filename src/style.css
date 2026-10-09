@@ -202,6 +202,7 @@ h1 { font: var(--weight-brand-medium) var(--size-l)/var(--line-l) var(--font-bra
 .start-note { font-size: var(--size-xs); line-height: var(--line-xs); color: var(--neutral-7); margin: var(--space-s) 0 0; }
 .menu-footer { padding: var(--space-s) var(--space-l); box-shadow: inset 0 1px var(--border-default-color); font-size: var(--size-xs); color: var(--neutral-7); }
 .menu-footer button { background: var(--color-none); color: var(--neutral-8); padding: var(--space-xxs) var(--space-xs); font-size: var(--size-xs); }
+.menu-footer a { color: var(--neutral-10); text-underline-offset: var(--space-xxs); }
 .setting-range, .toggle-row { font-size: var(--size-s); line-height: var(--line-s); color: var(--neutral-10); gap: var(--space-xs); margin: var(--space-s) 0; }
 .setting-range output { font: var(--weight-data-regular) var(--size-xs)/var(--line-xs) var(--font-data); color: var(--neutral-7); }
 select, #settings-tab>input[type=number] { background: var(--select-default-control-rest-background); color: var(--select-default-control-rest-foreground); padding: var(--space-xs) var(--space-s); font: var(--weight-ui-regular) var(--size-xs)/var(--line-xs) var(--font-ui); box-shadow: inset 0 0 0 var(--border-s) var(--neutral-4); }
