@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { LightState } from './map-lighting';
 
 // Source's VertexLitGeneric phong pixel shader (CS:GO materialsystem/stdshaders/phong_ps20b.fxc and
 // common_vertexlitgeneric_dx9.h), with the constants phong_dx9_helper.cpp derives from each VMT.
@@ -6,12 +7,48 @@ import * as THREE from 'three';
 // (CS:GO forces the first to the sun), with the map's light scale.
 export type SourcePhong = { shader: string; phongBoost: number; albedoBoost: number; fresnelRanges: number[]; exponent: number;
   tint: number[]; rim: boolean; rimExponent: number; rimBoost: number; rimMaskControl: number; maskTexture: number };
-// Shared, updated each frame: light direction and colours in view space plus the view-to-world rotation.
-export const lighting = {
-  lightDir: { value: [new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 1, 0)] }, lightColor: { value: [new THREE.Color(0), new THREE.Color(0)] },
-  lightScale: { value: 1 },
-  ambientCube: { value: [0, 0, 0, 0, 0, 0].map(() => new THREE.Color()) }, viewToWorld: { value: new THREE.Matrix3() },
-};
+// Light direction and colours in view space plus the view-to-world rotation, updated each frame.
+// The viewmodel uses the shared state; each remote player has its own, lit where it stands.
+export function createLighting() {
+  return {
+    lightDir: { value: [new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 1, 0)] }, lightColor: { value: [new THREE.Color(0), new THREE.Color(0)] },
+    lightScale: { value: 1 },
+    ambientCube: { value: [0, 0, 0, 0, 0, 0].map(() => new THREE.Color()) }, viewToWorld: { value: new THREE.Matrix3() },
+  };
+}
+export type Lighting = ReturnType<typeof createLighting>;
+export const lighting = createLighting();
+
+// Light state for the concrete room, which has no compiled lighting, matched to its browser sun.
+const SUN_DIRECTION = new THREE.Vector3(-500, 1100, 350).normalize();
+const SUN_COLOR = new THREE.Color(1.0, 0.95, 0.84).multiplyScalar(1.6);
+const AMBIENT_CUBE = [[0.24, 0.25, 0.25], [0.2, 0.21, 0.21], [0.42, 0.46, 0.47], [0.1, 0.1, 0.09], [0.22, 0.23, 0.23], [0.22, 0.23, 0.23]]
+  .map(([r, g, b]) => new THREE.Color(r, g, b));
+
+// camera: the world camera's rotation, so lights stay fixed in the world as the view turns.
+// state: the map's compiled light state at the model (Source axes), or null for the concrete room.
+export function applyLighting(target: Lighting, state: LightState | null, camera: THREE.Quaternion) {
+  const toView = camera.clone().invert();
+  if (state) {
+    // Source (x, y, z) -> three.js (x, z, -y); cube sides reorder to +x -x +y -y +z -z on three.js axes.
+    [0, 1, 4, 5, 3, 2].forEach((side, i) => target.ambientCube.value[i].setRGB(...state.ambient[side] as [number, number, number]));
+    for (let i = 0; i < 2; i++) {
+      const light = state.lights[i];
+      if (light) {
+        target.lightDir.value[i].set(light.direction.x, light.direction.z, -light.direction.y).normalize().applyQuaternion(toView);
+        target.lightColor.value[i].setRGB(...light.color as [number, number, number]);
+      } else target.lightColor.value[i].setRGB(0, 0, 0);
+    }
+    // LDR lightmaps are 2x overbright in gamma space: linear lighting x 2^1.2 matches the map surfaces.
+    target.lightScale.value = Math.pow(2, 1.2);
+  } else {
+    target.lightDir.value[0].copy(SUN_DIRECTION).applyQuaternion(toView);
+    target.lightColor.value[0].copy(SUN_COLOR); target.lightColor.value[1].setRGB(0, 0, 0);
+    AMBIENT_CUBE.forEach((c, i) => target.ambientCube.value[i].copy(c));
+    target.lightScale.value = 1;
+  }
+  target.viewToWorld.value.setFromMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(camera));
+}
 
 const vertexShader = /* glsl */`
 #include <common>
@@ -97,12 +134,12 @@ void main() {
   #include <colorspace_fragment>
 }`;
 
-export function sourcePhongMaterial(params: SourcePhong, base: THREE.Texture, normal: THREE.Texture | null, normalScale: THREE.Vector2, masks: THREE.Texture) {
+export function sourcePhongMaterial(params: SourcePhong, base: THREE.Texture, normal: THREE.Texture | null, normalScale: THREE.Vector2, masks: THREE.Texture, light: Lighting = lighting) {
   masks.colorSpace = THREE.NoColorSpace;
   return new THREE.ShaderMaterial({
     vertexShader, fragmentShader,
     uniforms: {
-      ...lighting,
+      ...light,
       baseMap: { value: base }, normalMap: { value: normal }, maskMap: { value: masks }, hasNormalMap: { value: !!normal },
       normalScale: { value: normalScale.clone() }, rimLight: { value: params.rim },
       fresnelRanges: { value: new THREE.Vector3(...params.fresnelRanges) }, tint: { value: new THREE.Vector3(...params.tint) },

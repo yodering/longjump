@@ -53,9 +53,10 @@ export class MapLighting {
     }
     return true;
   }
-  state(p: Vec): LightState {
+  // cache: remember the result for the viewmodel's eye; other callers (remote players) pass false.
+  state(p: Vec, cache = true): LightState {
     // The state only changes with position; skip the work while the eye is still.
-    if (this.last && Math.hypot(p.x - this.last.position.x, p.y - this.last.position.y, p.z - this.last.position.z) < 1) return this.last.state;
+    if (cache && this.last && Math.hypot(p.x - this.last.position.x, p.y - this.last.position.y, p.z - this.last.position.z) < 1) return this.last.state;
     const samples = this.ambient(p);
     if (samples) this.lastAmbient = samples;
     const ambient = this.lastAmbient?.map(side => [...side]) ?? AXES.map(() => [0, 0, 0]);
@@ -73,7 +74,7 @@ export class MapLighting {
       if (facing > 0) for (let k = 0; k < 3; k++) ambient[side][k] += facing * extra.color[k];
     });
     const state = { ambient, lights };
-    this.last = { position: { ...p }, state };
+    if (cache) this.last = { position: { ...p }, state };
     return state;
   }
   // Engine falloff for emit_point / emit_spotlight: intensity / (c + l*d + q*d²), with the spot cone.

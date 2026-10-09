@@ -20,7 +20,7 @@ pip install pillow vpk
 python scripts/import_players.py csgo-depot/csgo/pak01_dir.vpk public/players
 ```
 
-[provenance.json](provenance.json) records the SHA-256 of all 51 source files the importer reads and of both outputs. The conversion is deterministic.
+[provenance.json](provenance.json) records the SHA-256 of every source file the importer reads and of both outputs. The conversion is deterministic.
 
 ## Conversion
 
@@ -28,8 +28,11 @@ python scripts/import_players.py csgo-depot/csgo/pak01_dir.vpk public/players
 
 - **Skeleton.** The body's 89 (CT) or 86 (T) bones, with the third-person knife bone-merged by name, as Source does for world models.
 - **Animation decoding.** The animsets store `mstudioanim_t` run-length-encoded tracks (`bone_decode.cpp`): raw `Quaternion48`/`Quaternion64`, Euler angles scaled by each bone's `rotscale` and added to its default `rot` (non-delta), and `posscale` positions. Long sequences are split into 30-frame sections.
-- **Layer baking.** CS:GO's `csgo_playeranimstate.cpp` layers a full-body aim pose (`knife_aim_idle/walk/run/crouch_idle/crouch_moving`, from the centre of the 3×3 aim grid) under the eight-direction movement cycles (`move_knife_r/w/c`) and the jump, fall and land sequences. Each layer applies through its sequence's per-bone weight list. The importer bakes those combinations into 30 glTF clips: `idle`, `crouch_idle`, `run_*`, `walk_*` and `crouch_*` for eight directions, plus `jump`, `fall`, `land_light` and `land_heavy`. All directions in a set are resampled to one length so they loop together. Each clip's ground speed comes from its animation's movement record and is stored in the scene extras.
-- **Size.** Tracks that never move are dropped. Unchanging tracks become one key, and rotations are stored as normalized 16-bit quaternions. Colour textures are capped at 1024 px and normal maps at 512 px. Phong mask textures are omitted because players currently use three.js standard materials; the VMT phong constants stay in each material's `extras.source`. Each GLB is about 3 MB.
+- **Layer baking.** CS:GO's `csgo_playeranimstate.cpp` layers a full-body aim pose (`knife_aim_idle/walk/run/crouch_idle/crouch_moving`, from the centre of the 3×3 aim grid) under the eight-direction movement cycles (`move_knife_r/w/c`) and the jump, fall and land sequences. Each layer applies through its sequence's per-bone weight list. The importer bakes those combinations into glTF clips: `idle`, `crouch_idle`, `run_*`, `walk_*` and `crouch_*` for eight directions, plus `jump`, `fall`, `land_light` and `land_heavy`. It also exports reference poses that the game applies additively:
+  - **Aim:** the aim grid's ends (yaw ±60°, pitch ±90°, standing and crouched) as `aim_up/down/left/right` and `crouch_aim_*`.
+  - **Lean:** the four leans as `lean_n/e/s/w`.
+  - **Idle fidget:** `alive`, the idle pose breaker. It's a delta animation, applied like Source's `QuaternionSM` (rotation = delta^w × base, position = base + w × delta). All directions in a set are resampled to one length so they loop together. Each clip's ground speed comes from its animation's movement record and is stored in the scene extras.
+- **Size.** Tracks that never move are dropped. Unchanging tracks become one key, and rotations are stored as normalized 16-bit quaternions. Colour textures are capped at 1024 px and normal maps at 512 px. Packed phong masks are 256 px. Each GLB is about 3.8 MB.
 
 ## Runtime
 
@@ -41,7 +44,15 @@ Every frame, the actor's interpolated velocity, view yaw, crouch amount and grou
 - **Playback speed:** cycles play at the speed their feet cover the ground.
 - **Air:** takeoff plays `jump` and leaving the ground fades to `fall`. Landing after more than 0.25 s in the air plays `land_light` briefly.
 
-The body faces the view yaw. Aim pitch, the idle pose-breaker, lean and Source's feet-yaw lag are not applied.
+Additive layers then follow CS:GO's player animation state:
+- **Feet yaw:** the body turns toward the view while moving. Standing still, it stays put until the view passes 58°, then squares up after a moment. The `aim_left/right` poses twist the upper body the rest of the way.
+- **Pitch:** the view pitch weights `aim_up/down`.
+- **Lean:** ground acceleration relative to the body weights the two nearest `lean_*` poses.
+- **Idle fidget:** `alive` loops at full weight, and at half weight in the air.
+
+Additive clips are measured from `idle` (or `crouch_idle`). Bones missing from the reference use their rest pose.
+
+Each player is drawn with Source's phong shader (`src/source-phong.ts`), as the viewmodel is. It has its own light state: the map's compiled lighting sampled at chest height where the player stands (`MapLighting.state`), refreshed after it moves 8 units or every 300 ms. On these maps the compiled sun is nearly horizontal, so the ambient cube provides most of the model light, just as for the viewmodel.
 
 ## Rights
 

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { lighting, sourcePhongMaterial, type SourcePhong } from './source-phong.ts';
+import { applyLighting, lighting, sourcePhongMaterial, type SourcePhong } from './source-phong.ts';
 import type { LightState } from './map-lighting';
 import { viewPresets, type ViewSettings } from './settings.ts';
 
@@ -29,12 +29,6 @@ function bobCycle(time: number, period: number) {
   return cycle < BOB_UP ? Math.PI * cycle / BOB_UP : Math.PI + Math.PI * (cycle - BOB_UP) / (1 - BOB_UP);
 }
 const CLIPS: Record<ViewAction, string[]> = { draw: ['draw'], inspect: ['lookat01'], light: ['light_miss1', 'light_miss2'], heavy: ['heavy_miss1'] };
-
-// Light state for the concrete room, which has no compiled lighting, matched to its browser sun.
-const SUN_DIRECTION = new THREE.Vector3(-500, 1100, 350).normalize();
-const SUN_COLOR = new THREE.Color(1.0, 0.95, 0.84).multiplyScalar(1.6);
-const AMBIENT_CUBE = [[0.24, 0.25, 0.25], [0.2, 0.21, 0.21], [0.42, 0.46, 0.47], [0.1, 0.1, 0.09], [0.22, 0.23, 0.23], [0.22, 0.23, 0.23]]
-  .map(([r, g, b]) => new THREE.Color(r, g, b));
 
 type Loaded = { root: THREE.Object3D; mixer: THREE.AnimationMixer; clips: Map<string, THREE.AnimationClip>;
   finished?: (event: { action: THREE.AnimationAction }) => void };
@@ -166,26 +160,7 @@ export class Viewmodel {
   // camera: the world camera's rotation, so lights stay fixed in the world as the view turns.
   // state: the map's compiled light state at the eye (Source axes), or null for the concrete room.
   render(renderer: THREE.WebGLRenderer, camera: THREE.Quaternion, state: LightState | null) {
-    const toView = camera.clone().invert();
-    if (state) {
-      // Source (x, y, z) -> three.js (x, z, -y); cube sides reorder to +x -x +y -y +z -z on three.js axes.
-      [0, 1, 4, 5, 3, 2].forEach((side, i) => lighting.ambientCube.value[i].setRGB(...state.ambient[side] as [number, number, number]));
-      for (let i = 0; i < 2; i++) {
-        const light = state.lights[i];
-        if (light) {
-          lighting.lightDir.value[i].set(light.direction.x, light.direction.z, -light.direction.y).normalize().applyQuaternion(toView);
-          lighting.lightColor.value[i].setRGB(...light.color as [number, number, number]);
-        } else lighting.lightColor.value[i].setRGB(0, 0, 0);
-      }
-      // LDR lightmaps are 2x overbright in gamma space: linear lighting x 2^1.2 matches the map surfaces.
-      lighting.lightScale.value = Math.pow(2, 1.2);
-    } else {
-      lighting.lightDir.value[0].copy(SUN_DIRECTION).applyQuaternion(toView);
-      lighting.lightColor.value[0].copy(SUN_COLOR); lighting.lightColor.value[1].setRGB(0, 0, 0);
-      AMBIENT_CUBE.forEach((c, i) => lighting.ambientCube.value[i].copy(c));
-      lighting.lightScale.value = 1;
-    }
-    lighting.viewToWorld.value.setFromMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(camera));
+    applyLighting(lighting, state, camera);
     renderer.clearDepth();
     renderer.render(this.scene, this.camera);
   }

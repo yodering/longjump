@@ -24,9 +24,9 @@ TEAMS = {
     't': {'body': 'models/player/custom_player/legacy/tm_phoenix.mdl', 'knife': 'models/weapons/w_knife_default_t.mdl'},
 }
 RAWPOS, RAWROT, ANIMPOS, ANIMROT, DELTA, RAWROT2 = 0x01, 0x02, 0x04, 0x08, 0x10, 0x20
-FRAMEANIM = 0x40
+FRAMEANIM, ANIM_DELTA = 0x40, 0x04
 # Remote players are seen at a distance; larger textures only add download size.
-COLOR_SIZE, NORMAL_SIZE = 1024, 512
+COLOR_SIZE, NORMAL_SIZE, MASK_SIZE = 1024, 512, 256
 DIRECTIONS = ['n', 'nw', 'w', 'sw', 's', 'se', 'e', 'ne']  # move_yaw blend cells 0-7 (cell 8 repeats north)
 
 def quat64(d, o):
@@ -95,7 +95,7 @@ class AnimSet(Model):
         duration = max(1, endframe) / info['fps']
         return math.hypot(position[0], position[1]) / duration
     def pose(self, anim, frame):
-        """Local (pos, quat) for every bone at an integer frame (non-delta animations)."""
+        """Local (pos, quat) for every bone at an integer frame. Delta animations leave unlisted bones at identity."""
         d, a = self.d, i32(self.d, 184) + anim * 100
         info = self.info(anim)
         if info['flags'] & FRAMEANIM: return self.anim_frame(anim, frame)[0]
@@ -106,7 +106,8 @@ class AnimSet(Model):
             else: section, local = frame // sectionframes, frame % sectionframes
             block, index = struct.unpack_from('<ii', d, a + i32(d, a + 80) + section * 8)
         if block != 0: raise ValueError(f'{self.path}: external animation blocks are not supported')
-        pose = [(list(b['pos']), list(b['quat'])) for b in self.bones]
+        if info['flags'] & ANIM_DELTA: pose = [([0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 1.0]) for _ in self.bones]
+        else: pose = [(list(b['pos']), list(b['quat'])) for b in self.bones]
         o = a + index
         while True:
             bone, flags, next_offset = d[o], d[o + 1], struct.unpack_from('<h', d, o + 2)[0]
@@ -150,6 +151,22 @@ def layer(base, over, weights, amount=1.0):
         out.append(([a + (b - a) * w for a, b in zip(p, op)], slerp(q, oq, w)))
     return out
 
+def qmul(a, b):
+    """Hamilton product a * b with (x, y, z, w) components, as Source's QuaternionMult."""
+    ax, ay, az, aw = a; bx, by, bz, bw = b
+    return [aw * bx + ax * bw + ay * bz - az * by, aw * by - ax * bz + ay * bw + az * bx,
+            aw * bz + ax * by - ay * bx + az * bw, aw * bw - ax * bx - ay * by - az * bz]
+
+def add(base, delta, weights, amount=1.0):
+    """A delta layer, as Source's QuaternionSM: rotation = delta^w * base, position = base + w * delta."""
+    out = []
+    for k, (p, q) in enumerate(base):
+        w = weights[k] * amount
+        if w <= 0: out.append((p, q)); continue
+        dp, dq = delta[k]
+        out.append(([a + b * w for a, b in zip(p, dp)], qmul(slerp([0.0, 0.0, 0.0, 1.0], dq, w), q)))
+    return out
+
 def sample(animset, anim, frames):
     """The animation resampled to a fixed frame count by cycle, so every direction in a set loops together."""
     total = animset.info(anim)['frames']
@@ -167,13 +184,23 @@ def clips(animset):
             anim = animset.blend(sequence, k)
             poses = [layer(aim[base], p, weights) for p in sample(animset, anim, frames)]
             out[f'{kind}_{direction}'] = (fps, poses, animset.speed(anim))
+    # Reference poses the game applies additively: aim pitch and yaw at the ends of the aim grid
+    # (yaw +-60, pitch +-90; CS:GO's negative pitch looks up), standing and crouched, and the four leans.
+    for state, prefix in (('idle', ''), ('crouch_idle', 'crouch_')):
+        for name, (x, y) in {'aim_up': (1, 0), 'aim_down': (1, 2), 'aim_right': (0, 1), 'aim_left': (2, 1)}.items():
+            out[prefix + name] = (30.0, [animset.pose(animset.blend(f'knife_aim_{state}', x, y), 0)], 0.0)
+    for k, direction in enumerate(('s', 'w', 'n', 'e')):
+        out[f'lean_{direction}'] = (30.0, [layer(aim['idle'], animset.pose(animset.blend('lean', k), 0), animset.weights('lean'))], 0.0)
+    # The idle pose breaker (CS:GO's alive loop) is a delta animation; bake it onto the idle pose.
+    alive = animset.blend('additive_posebreaker_knife', 0); info = animset.info(alive)
+    out['alive'] = (info['fps'], [add(aim['idle'], animset.pose(alive, f), animset.weights('additive_posebreaker_knife')) for f in range(info['frames'])], 0.0)
     for name, base in (('jump', 'idle'), ('fall', 'idle'), ('land_light', 'idle'), ('land_heavy', 'idle')):
         anim = animset.blend(name, 0); info = animset.info(anim); weights = animset.weights(name)
         out[name] = (info['fps'], [layer(aim[base], animset.pose(anim, f), weights) for f in range(info['frames'])], 0.0)
     return out
 
 def material_for(pak, glb, g, images, mesh):
-    """Base colour and normal textures plus the VMT phong constants."""
+    """Source phong material: base, normal and packed mask textures plus the VMT constants."""
     shader, params = iv.parse_vmt(pak, mesh['material'])
     path = lambda key: re.sub('/+', '/', iv.vtf_path(params[key])) if key in params else None
     base_path, bump_path = path('$basetexture'), path('$bumpmap')
@@ -190,8 +217,21 @@ def material_for(pak, glb, g, images, mesh):
                 'metallicFactor': 0.0, 'roughnessFactor': 0.6}, 'extras': {'source': source}}
     if '$translucent' in params and params['$translucent'] not in ('0', ''): material['alphaMode'] = 'BLEND'
     if bump_path: material['normalTexture'] = {'index': image(bump_path, True)}
-    # Players render with three.js standard materials for now, so the Source phong mask texture is
-    # left out to keep the download small; the VMT constants stay in extras for a later Source shader.
+    # Source phong masks: R = phong mask, G/B/A = exponent map red (exponent), green (albedo tint), alpha (rim mask),
+    # as the viewmodel importer packs them, at a small size since players are seen at a distance.
+    exp_path, masks1_path = path('$phongexponenttexture'), path('$masks1')
+    size = (MASK_SIZE, MASK_SIZE)
+    phong_mask = iv.decode_vtf(pak.get_file(base_path if source['baseAlphaPhongMask'] or not bump_path else bump_path).read()).split()[3]
+    channels = [phong_mask.resize(size, Image.LANCZOS)]
+    if exp_path:
+        r, gch, _, a = iv.decode_vtf(pak.get_file(exp_path).read()).resize(size, Image.LANCZOS).split(); channels += [r, gch, a]
+    elif masks1_path:
+        r, gch, _, _ = iv.decode_vtf(pak.get_file(masks1_path).read()).resize(size, Image.LANCZOS).split(); channels += [Image.new('L', size, 0), gch, r]
+    else:
+        channels += [Image.new('L', size, 0), Image.new('L', size, 0), Image.new('L', size, 255)]
+    g['images'].append({'bufferView': glb.view(iv.png(Image.merge('RGBA', channels))), 'mimeType': 'image/png', 'name': material['name'] + '_masks'})
+    g['textures'].append({'source': len(g['images']) - 1, 'sampler': 0})
+    source['maskTexture'] = len(g['textures']) - 1
     g['materials'].append(material)
     return len(g['materials']) - 1
 

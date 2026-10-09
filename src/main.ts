@@ -464,6 +464,8 @@ function updateHUD() {
 function view() {
   return { punch: movement.viewPunch, speed: speed(movement.velocity), grounded: movement.grounded, show: settings.viewmodel, leftHand: settings.leftHand };
 }
+// Remote players are lit by the map's compiled lighting where they stand, like the viewmodel at the eye.
+const lightAt = (p: Vec) => world.lighting?.state(p, false) ?? null;
 function frame(_frameTimestamp: number) {
   // rAF's shared timestamp can predate events already delivered to this callback.
   // Sample the current clock so those inputs do not wait for another draw.
@@ -478,11 +480,11 @@ function frame(_frameTimestamp: number) {
       movement.step(input);
       if (belowMap(classic, movement.position)) { fallTime += 1 / movement.tickRate; if (fallTime > 0.32) { reset(); sounds.play('checkpoint'); } } else fallTime = 0;
     });
-    remote.update(now, world.camera);
+    remote.update(now, world.camera, lightAt);
     world.play(movement.renderEye(commands.alpha, commands.preview(now)), yaw, pitch, dt, view());
     updateHUD();
-  } else if (!started && !settingsPreview) { remote.update(now, world.camera); world.preview(now / 1000); }
-  else { remote.update(now, world.camera); world.play(movement.eye(1), yaw, pitch, dt, view()); }
+  } else if (!started && !settingsPreview) { remote.update(now, world.camera, lightAt); world.preview(now / 1000); }
+  else { remote.update(now, world.camera, lightAt); world.play(movement.eye(1), yaw, pitch, dt, view()); }
   room.pose(now, movement.position, movement.velocity, yaw, pitch, movement.grounded, movement.duckAmount, settings.team);
   requestAnimationFrame(frame);
 }
