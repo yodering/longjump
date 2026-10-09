@@ -21,13 +21,15 @@ const ADDITIVE: Record<string, string> = { aim_up: 'idle', aim_down: 'idle', aim
   crouch_aim_up: 'crouch_idle', crouch_aim_down: 'crouch_idle', crouch_aim_left: 'crouch_idle', crouch_aim_right: 'crouch_idle',
   lean_n: 'idle', lean_e: 'idle', lean_s: 'idle', lean_w: 'idle', alive: 'idle' };
 type Team = 'ct' | 't';
-type Snapshot = { at: number; p: THREE.Vector3; v: THREE.Vector3; yaw: number; pitch: number; duck: number; grounded: boolean; team: Team };
+type Snapshot = { at: number; p: THREE.Vector3; v: THREE.Vector3; yaw: number; pitch: number; duck: number; grounded: boolean; team: Team; spectating: boolean };
 type Prepared = { gltf: GLTF; materials: Map<string, { params: SourcePhong; base: THREE.Texture; normal: THREE.Texture | null; normalScale: THREE.Vector2; masks: THREE.Texture }> };
 type Rig = { model: THREE.Object3D; mixer: THREE.AnimationMixer; actions: Map<string, THREE.AnimationAction>; speeds: Record<string, number>; team: Team; materials: THREE.Material[] };
 type Motion = { moving: number; running: number; crouch: number; air: number; land: number; airTime: number; wasGrounded: boolean;
   feetYaw: number | null; stillTime: number; lastVelocity: THREE.Vector3 | null; acceleration: THREE.Vector3 };
 type Actor = { root: THREE.Group; stand: THREE.Mesh; label: THREE.Sprite; name: string; snapshots: Snapshot[]; rig: Rig | null; loading: Team | null;
-  motion: Motion; lighting: Lighting; light: { state: LightState | null; at: number; position: THREE.Vector3 | null } };
+  motion: Motion; lighting: Lighting; light: { state: LightState | null; at: number; position: THREE.Vector3 | null }; view: SpectatorView | null };
+/** What a spectator sees from a player: Source units, with the speed they had when they last left the ground. */
+export type SpectatorView = { name: string; eye: Vec; velocity: Vec; yaw: number; pitch: number; grounded: boolean; takeoff: number | null };
 
 // Source units (x right, y forward, z up) to three.js (x right, y up, -z forward).
 const toThree = (p: [number, number, number]) => new THREE.Vector3(p[0], p[2], -p[1]);
@@ -131,7 +133,7 @@ export class RemotePlayers {
     stand.position.y = RULES.height / 2; root.add(stand, tag); root.visible = false;
     this.group.add(root);
     this.actors.set(id, { root, stand, label: tag, name, snapshots: [], rig: null, loading: null, lighting: createLighting(),
-      light: { state: null, at: -Infinity, position: null },
+      light: { state: null, at: -Infinity, position: null }, view: null,
       motion: { moving: 0, running: 0, crouch: 0, air: 0, land: 0, airTime: 0, wasGrounded: true, feetYaw: null, stillTime: 0, lastVelocity: null, acceleration: new THREE.Vector3() } });
   }
   private ensureRig(actor: Actor, team: Team) {
@@ -155,7 +157,12 @@ export class RemotePlayers {
   }
   clear() { for (const [id, actor] of this.actors) this.remove(id, actor); this.offsets = []; }
   /** Forgets positions, e.g. after a map change, so nobody slides across the new map. */
-  forgetPositions() { for (const actor of this.actors.values()) { actor.snapshots = []; actor.root.visible = false; actor.light.position = null; } }
+  forgetPositions() { for (const actor of this.actors.values()) { actor.snapshots = []; actor.root.visible = false; actor.light.position = null; actor.view = null; } }
+  /** The player being watched in first person; their own model is hidden from the camera inside it. */
+  spectating: string | null = null;
+  /** Players that can be watched, in roster order: placed on this map and not spectating themselves. */
+  targets() { return [...this.actors].filter(([, a]) => a.view && !a.snapshots.at(-1)?.spectating).map(([id]) => id); }
+  view(id: string) { return this.actors.get(id)?.view ?? null; }
 
   receive(at: number, poses: RoomPose[], now: number) {
     // Clock offset from the fastest recent delivery; slower packets just arrive late.
@@ -163,7 +170,7 @@ export class RemotePlayers {
     for (const pose of poses) {
       const actor = this.actors.get(pose.id); if (!actor) continue;
       const snapshot = { at, p: toThree(pose.p), v: toThree(pose.v), yaw: pose.yaw, pitch: pose.pitch, duck: pose.d, grounded: pose.g,
-        team: pose.m === 't' ? 't' as const : 'ct' as const };
+        team: pose.m === 't' ? 't' as const : 'ct' as const, spectating: pose.s === true };
       const last = actor.snapshots.at(-1);
       if (pose.r || (last && last.p.distanceTo(snapshot.p) > SNAP_DISTANCE)) { actor.snapshots = []; actor.motion.feetYaw = null; actor.motion.lastVelocity = null; }
       actor.snapshots.push(snapshot);
@@ -177,7 +184,7 @@ export class RemotePlayers {
     const dt = Math.min(0.1, Math.max(0, (now - (this.lastUpdate || now)) / 1000)); this.lastUpdate = now;
     if (!this.offsets.length) return;
     const renderAt = now - Math.min(...this.offsets) - INTERPOLATION_DELAY_MS;
-    for (const actor of this.actors.values()) {
+    for (const [id, actor] of this.actors) {
       const s = actor.snapshots; if (!s.length) continue;
       while (s.length > 2 && s[1].at <= renderAt) s.shift();
       let position: THREE.Vector3, velocity: THREE.Vector3, yaw: number, pitch: number, duck: number, grounded: boolean;
@@ -201,8 +208,13 @@ export class RemotePlayers {
       m.feetYaw += Math.sign(toView) * Math.min(Math.abs(toView), turnRate * dt);
       const twist = wrap(yaw - m.feetYaw);
       if (Math.abs(twist) > MAX_BODY_TWIST) m.feetYaw = yaw - Math.sign(twist) * MAX_BODY_TWIST;
-      actor.root.position.copy(position); actor.root.rotation.y = -m.feetYaw; actor.root.visible = true;
       const height = RULES.height - (RULES.height - RULES.duckHeight) * duck;
+      const takeoff = grounded ? null : actor.view && !actor.view.grounded ? actor.view.takeoff : speed;
+      const feet = toSource(position);
+      actor.view = { name: actor.name, eye: { ...feet, z: feet.z + RULES.viewHeight - (RULES.viewHeight - RULES.duckViewHeight) * duck },
+        velocity: toSource(velocity), yaw, pitch, grounded, takeoff };
+      actor.root.position.copy(position); actor.root.rotation.y = -m.feetYaw;
+      actor.root.visible = !s.at(-1)!.spectating && this.spectating !== id;
       actor.stand.scale.y = height / RULES.height; actor.stand.position.y = height / 2;
       actor.label.position.y = height + 10;
       actor.label.visible = camera.position.distanceTo(position) < LABEL_DISTANCE;

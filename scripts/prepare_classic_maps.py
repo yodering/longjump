@@ -1,4 +1,4 @@
-"""Prepare the two researched Workshop imports. Run after import_source_map.py.
+"""Prepare the researched Workshop imports. Run after import_source_map.py.
 The selection of practice pads comes from BSP brush coordinates, not recreated spacing.
 Also packs the compiled lightmaps of the faces that are kept into one atlas per map (Source's LDR
 lightmap format: 8-bit (L/2)^(1/2.2)), and prunes the BSP tree and leaf ambient samples to the kept area.
@@ -34,6 +34,30 @@ def clip_meshes(meshes,lo,hi):
         if new['positions']:result.append(new)
     return result
 
+def boundaries(lo,hi,label):
+    """Invisible 16-unit walls on the four sides of a crop, so players stay in the imported area."""
+    walls=[]
+    for axis in ('x','y'):
+        i=('x','y','z').index(axis)
+        for edge,direction in [(lo[i],-1),(hi[i],1)]:
+            minimum=dict(zip(('x','y','z'),lo));maximum=dict(zip(('x','y','z'),hi))
+            minimum[axis]=edge-16 if direction<0 else edge
+            maximum[axis]=edge if direction<0 else edge+16
+            walls.append({'id':f'{label}-boundary-{axis}-{direction}','min':minimum,'max':maximum,'entityClass':'browser_boundary'})
+    return walls
+
+def world_text(path,lo,hi):
+    """point_worldtext labels inside the crop (kz_baxter numbers its blocks this way instead of with decals)."""
+    entities=json.loads((path/'entities.json').read_text());labels=[]
+    for e in entities:
+        if e.get('classname')!='point_worldtext' or not e.get('message'):continue
+        origin=[float(v) for v in e['origin'].split()]
+        if not all(lo[i]<=origin[i]<=hi[i] for i in range(3)):continue
+        angles=[round(float(v),3)+0.0 for v in e.get('angles','0 0 0').split()]
+        labels.append({'text':e['message'],'origin':origin,'angles':angles,'size':float(e.get('textsize',10)),
+                       'color':[int(v) for v in e.get('color','255 255 255').split()[:3]]})
+    return labels
+
 def prepare(name,origin):
     path=pathlib.Path(origin);data=json.loads((path/'map.json').read_text());boxes=data['boxes'];lanes=[]
     if name=='longjump_source_go':
@@ -48,19 +72,44 @@ def prepare(name,origin):
         original=data['spawns'][0]
         data['entry']={'position':{**original['position'],'z':64},'yaw':1.5707963267948966-original['angles'][1]*3.141592653589793/180}
         data['resetFloor']=64
+    elif name=='kz_baxter':
+        # The LJ block room (teleport destination "ljblocks"); the climb, hub and diagonal room are not imported.
+        lo=(5880,1240,-1760);hi=(11860,9460,-1480)
+        omitted=[b for b in data['nonAxial'] if intersects(b,lo,hi)]
+        print('Non-axial brushes intersecting kz_baxter LJ room:',len(omitted),omitted[:3])
+        data['boxes']=[b for b in boxes if intersects(b,lo,hi) and b['entityClass']=='worldspawn']+boundaries(lo,hi,'room')
+        data['worldText']=world_text(path,lo,hi)
+        numbers=[(l['text'],l['origin']) for l in data['worldText'] if l['text'].isdigit()]
+        pads=[b for b in data['boxes'] if b['max']['z']==-1688 and b['entityClass']=='worldspawn']
+        overlap=lambda a,b,axis:min(a['max'][axis],b['max'][axis])-max(a['min'][axis],b['min'][axis])
+        for start in pads:
+            for end in pads:
+                for axis,across in (('x','y'),('y','x')):
+                    gap=end['min'][axis]-start['max'][axis]
+                    if not (200<=gap<=320 and overlap(start,end,across)>=32):continue
+                    if any(b not in (start,end) and b['min'][axis]<end['min'][axis] and b['max'][axis]>start['max'][axis]
+                           and overlap(b,start,across)>0 and overlap(b,end,across)>0 for b in pads):continue
+                    # Each lane is labeled with its gap on the faces of both pads; unlabeled pairs are not lanes.
+                    middle={axis:(start['max'][axis]+end['min'][axis])/2,across:(max(start['min'][across],end['min'][across])+min(start['max'][across],end['max'][across]))/2}
+                    text,at=min(numbers,key=lambda n:math.hypot(n[1][0]-middle['x'],n[1][1]-middle['y']))
+                    if text!=str(round(gap)) or math.hypot(at[0]-middle['x'],at[1]-middle['y'])>200:continue
+                    spawn={axis:start['min'][axis]+32,across:(start['min'][across]+start['max'][across])/2,'z':start['max']['z']}
+                    lanes.append({'gap':gap,'startId':start['id'],'endId':end['id'],'spawn':spawn,'yaw':1.5707963267948966 if axis=='x' else 0.0})
+        data['meshes']=clip_meshes(data['meshes'],lo,hi);data['decals']['meshes']=clip_meshes(data['decals']['meshes'],lo,hi)
+        data['skippedNonAxialBrushes']=len(omitted)
+        destination=next(e for e in json.loads((path/'entities.json').read_text()) if e.get('targetname')=='ljblocks')
+        x,y,z=(float(v) for v in destination['origin'].split())
+        floor=max(b['max']['z'] for b in data['boxes'] if b['max']['z']<=z and b['min']['x']<x+16 and b['max']['x']>x-16 and b['min']['y']<y+16 and b['max']['y']>y-16)
+        data['entry']={'position':{'x':x,'y':y,'z':floor},'yaw':1.5707963267948966-float(destination['angles'].split()[1])*math.pi/180}
+        data['preview']={'position':{'x':8870,'y':6400,'z':-1580},'target':{'x':8870,'y':3600,'z':-1700}}
+        data['resetFloor']=-1720
     else:
         lo=(-1450,740,-290);hi=(-410,3670,300)
         omitted=[b for b in data['nonAxial'] if intersects(b,lo,hi)]
         print('Non-axial brushes intersecting GO long-jump wing:',len(omitted),omitted[:3])
         data['boxes']=[b for b in boxes if intersects(b,lo,hi) and b['entityClass']=='worldspawn']
         # Keep players inside this cropped wing; the rest of the map is not imported.
-        for axis in ('x','y'):
-            i=('x','y','z').index(axis)
-            for edge,direction in [(lo[i],-1),(hi[i],1)]:
-                minimum=dict(zip(('x','y','z'),lo));maximum=dict(zip(('x','y','z'),hi))
-                minimum[axis]=edge-16 if direction<0 else edge
-                maximum[axis]=edge if direction<0 else edge+16
-                data['boxes'].append({'id':f'wing-boundary-{axis}-{direction}','min':minimum,'max':maximum,'entityClass':'browser_boundary'})
+        data['boxes']+=boundaries(lo,hi,'wing')
         pads=[b for b in data['boxes'] if b['max']['z']==-192 and b['max']['y']-b['min']['y']==160 and b['max']['x']-b['min']['x']>100]
         for start in pads:
             for end in pads:
@@ -174,8 +223,9 @@ def model_lighting(path,crop,target):
             'samples':'lighting.bin','leafSamples':leafSamples,'lights':[{k:w[k] for k in ('type','origin','intensity','normal','stopdot','stopdot2','exponent','attenuation')} for w in lights]}
 
 parser=argparse.ArgumentParser(description=__doc__)
-parser.add_argument('--source',required=True,help='Converted longjump_source_go directory')
-parser.add_argument('--go',required=True,help='Converted kz_longjumps_go directory')
+parser.add_argument('--source',help='Converted longjump_source_go directory')
+parser.add_argument('--go',help='Converted kz_longjumps_go directory')
+parser.add_argument('--baxter',help='Converted kz_baxter directory')
 args=parser.parse_args()
-prepare('longjump_source_go',args.source)
-prepare('kz_longjumps_go',args.go)
+for name,directory in (('longjump_source_go',args.source),('kz_longjumps_go',args.go),('kz_baxter',args.baxter)):
+    if directory:prepare(name,directory)

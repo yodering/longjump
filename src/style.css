@@ -139,6 +139,20 @@ input[type=range] { cursor: pointer; }
 .kz-metric { white-space: nowrap; }
 .kz-metric em { color: var(--chat-value); font-style: normal; }
 
+/* Speed under the crosshair, as on KZ servers: current speed, then takeoff speed in parentheses while airborne. */
+.crosshair-speed {
+  --speed-text: #fff;
+  --speed-outline: #000;
+  position: fixed; left: 50%; top: calc(50% + var(--space-xxl) + var(--space-l)); transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center;
+  font: var(--weight-ui-heavy) var(--size-l)/1.2 var(--font-ui); font-variant-numeric: tabular-nums;
+  color: var(--speed-text);
+  text-shadow: -1px -1px 0 var(--speed-outline), 1px -1px 0 var(--speed-outline), -1px 1px 0 var(--speed-outline), 1px 1px 0 var(--speed-outline), 0 1px 3px var(--speed-outline);
+  pointer-events: none; white-space: nowrap;
+}
+.spectate-banner { position: fixed; left: 50%; top: var(--space-l); transform: translateX(-50%); padding: var(--space-xs) var(--space-s); background: var(--neutral-2); border-radius: var(--radius-s); box-shadow: var(--border-shadow-s), var(--shadow-s); color: var(--neutral-7); font: var(--weight-ui-regular) var(--size-xs)/var(--line-xs) var(--font-ui); white-space: nowrap; pointer-events: none; }
+.spectate-banner b { color: var(--neutral-10); font-weight: var(--weight-ui-medium); }
+.spectate-banner kbd { margin: 0 var(--space-xxs) 0 var(--space-xs); }
 .play-controls { position: fixed; right: 24px; bottom: 26px; display: flex; align-items: center; gap: 14px; font: var(--size-xxs) var(--font-data); text-shadow: 0 1px 2px var(--neutral-3); }
 .play-controls kbd { font-size: var(--size-xxs); margin-right: 5px; background: var(--neutral-3); }
 .play-controls button { font-size: var(--size-m); background: none; border: 0; margin-left: 6px; }
@@ -386,3 +400,5 @@ body.playing .leaderboard-prompt-hint { display: block; margin: 0; }
 .room-players { display: flex; flex-wrap: wrap; gap: var(--space-xs) var(--space-m); list-style: none; margin: var(--space-s) 0 0; padding: 0; color: var(--neutral-10); font: var(--weight-ui-regular) var(--size-xs)/var(--line-xs) var(--font-ui); letter-spacing: var(--letter-spacing-xs); }
 .room-players:empty { display: none; }
 .room-players small { color: var(--neutral-7); font: inherit; }
+.room-players li { display: flex; align-items: center; gap: var(--space-xs); }
+.room-options { margin-top: var(--space-s); }

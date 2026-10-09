@@ -4,6 +4,7 @@ export const actions = {
   forward: 'Forward', back: 'Back', left: 'Strafe left', right: 'Strafe right', jump: 'Jump',
   duck: 'Duck', walk: 'Walk', longJump: 'Long jump bind', reset: 'Reset', save: 'Save position',
   return: 'Return to saved position', inspect: 'Inspect knife', light: 'Light swing', heavy: 'Heavy swing', stats: 'Toggle jump stats',
+  spectate: 'Spectate',
 } as const;
 export type Action = keyof typeof actions;
 export type Bindings = Record<Action, string[]>;
@@ -11,6 +12,7 @@ export const defaultBindings: Bindings = {
   forward: ['KeyW'], back: ['KeyS'], left: ['KeyA'], right: ['KeyD'], jump: ['Space', 'WheelUp', 'WheelDown'],
   duck: ['ControlLeft', 'ControlRight'], walk: ['ShiftLeft', 'ShiftRight'], longJump: [], reset: ['KeyR'],
   save: ['KeyX'], return: ['KeyC'], inspect: ['KeyF'], light: ['Mouse0'], heavy: ['Mouse2'], stats: ['KeyH'],
+  spectate: ['KeyM'],
 };
 export const validToken = (token: unknown): token is string => typeof token === 'string'
   && /^(Key[A-Z]|Digit[0-9]|F([1-9]|1[0-2])|Numpad[0-9]|Numpad(Add|Subtract|Multiply|Divide|Decimal|Enter)|Arrow(Up|Down|Left|Right)|Space|Tab|Enter|Backspace|Delete|Insert|Home|End|PageUp|PageDown|CapsLock|Shift(Left|Right)|Control(Left|Right)|Alt(Left|Right)|Bracket(Left|Right)|Semicolon|Quote|Comma|Period|Slash|Backslash|Minus|Equal|Backquote|Mouse[0-4]|Wheel(Up|Down))$/.test(token);
@@ -47,7 +49,10 @@ export function tokenLabel(token: string) {
   return names[token] ?? token.replace(/^(Key|Digit)/, '').replace('Numpad', 'Num ');
 }
 
+const opposite: Partial<Record<Action, Action>> = { left: 'right', right: 'left' };
 // Physical inputs remain distinct so releasing one jump/duck key never releases another held binding.
+// A null bind makes the newest strafe key win instead of cancelling out, like the CS:GO alias script:
+// pressing A while D is held releases D; releasing A presses the still-held D again.
 export class Controls {
   private held = new Set<string>();
   private blocked = new Set<string>();
@@ -56,6 +61,7 @@ export class Controls {
   private released = new Set<Action>();
   private jumpPressed = false;
   bindings: Bindings;
+  nullBind = false;
   constructor(bindings: Bindings) { this.bindings = bindings; }
   action(token: string) { return (Object.keys(actions) as Action[]).find(a => this.bindings[a].includes(token)); }
   down(token: string): Action | undefined {
@@ -65,13 +71,26 @@ export class Controls {
     if (action && !this.active(action)) this.pressed.add(action);
     this.held.add(token);
     if (action === 'longJump') this.cancelForward();
+    const other = action && opposite[action];
+    if (this.nullBind && other && this.active(other)) {
+      for (const held of this.held) if (this.action(held) === other) this.blocked.add(held);
+      this.released.add(other);
+    }
     if (action) this.pulses.add(action);
     return action;
   }
   up(token: string): undefined {
     const action = this.action(token), wasActive = action && this.active(action);
     this.held.delete(token); this.blocked.delete(token);
-    if (action && wasActive && !this.active(action)) this.released.add(action);
+    if (action && wasActive && !this.active(action)) {
+      this.released.add(action);
+      const other = opposite[action];
+      if (this.nullBind && other) {
+        let resumed = false;
+        for (const held of this.held) if (this.action(held) === other && this.blocked.delete(held)) resumed = true;
+        if (resumed) this.pressed.add(other);
+      }
+    }
     return undefined;
   }
   pulse(token: string): Action | undefined {
@@ -93,7 +112,7 @@ export class Controls {
   clear() { this.held.clear(); this.blocked.clear(); this.clearPulses(); }
   clearPulses() { this.pulses.clear(); this.pressed.clear(); this.released.clear(); this.jumpPressed = false; }
   fork() {
-    const copy = new Controls(this.bindings);
+    const copy = new Controls(this.bindings); copy.nullBind = this.nullBind;
     copy.held = new Set(this.held); copy.blocked = new Set(this.blocked);
     return copy;
   }

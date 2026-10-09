@@ -9,6 +9,12 @@ The [KZ-GC collection](https://steamcommunity.com/sharedfiles/filedetails/?id=12
 
 `kz_gc_jumpstats` by GameChaos appeared in the historic collections, but its original download was not recovered, so it is not included. `kz_longjumps2` is an older 1.6 map, rather than a CS:GO BSP, and its original author's page restricts remakes; it was not selected.
 
+## kz_baxter
+
+Added 9 October 2026 at the user's request. [kz_baxter](https://steamcommunity.com/sharedfiles/filedetails/?id=1366794864) was uploaded by Samuel on 21 April 2018 and updated 7 June 2018; its description reads "35-50s combo map, lj room by xq". In-map text credits the textures to TopHATTwaffle and Saspatoon. Only the LJ block room (teleport destination `ljblocks`) is imported; the climb, the hub room, the diagonal-jump room, the bonus and every teleport trigger are left out, and invisible bounds sit at the crop.
+
+The room numbers its blocks with `point_worldtext` entities on the pad faces instead of decals, so preparation exports them as `worldText` and the browser draws them as unlit text planes (bottom-left at the origin, running along the entity's right vector, read looking along its forward vector, `textsize` units tall). Lanes are pad pairs at the 32-unit pad height, along x or y, with nothing standable between them and a matching number label within 200 units of the gap: 89 lanes from 210 to 310 units. Four pairs of lower 128-wide pads 272 units apart carry no matching label and are not lanes. Nine distances have two lanes. The room has no non-axial brushes, decals or static props. Its stock textures are `cs_havana/white` and the `sky_csgo_cloudy01` skybox, read from CS:GO depot 731 chunks 006 and 116.
+
 ## Provenance
 
 [provenance.json](provenance.json) records original Workshop IDs, public Steam CDN file URLs, upload/update timestamps, filenames and SHA-256 hashes of the exact BSPs converted. Source metadata comes from Steam's `ISteamRemoteStorage/GetPublishedFileDetails/v1/` API. The CDN files are ZIP archives containing the BSPs. Original BSP binaries are not part of this project.
@@ -17,12 +23,13 @@ No separate permissive license was found. The assets remain credited to the map 
 
 ## Reproduce
 
-The exporter uses [Valve's published BSP structures](https://github.com/ValveSoftware/source-sdk-2013/blob/master/src/public/bspfile.h) and Pillow's DDS decoder for DXT-compressed VTF pixel blocks. Install Pillow and vpk in a Python environment (`pip install pillow vpk`), download the two archives from the recorded CDN URLs, and extract the BSPs. No map script or downloaded executable is run.
+The exporter uses [Valve's published BSP structures](https://github.com/ValveSoftware/source-sdk-2013/blob/master/src/public/bspfile.h) and Pillow's DDS decoder for DXT-compressed VTF pixel blocks. Install Pillow and vpk in a Python environment (`pip install pillow vpk`), download the archives from the recorded CDN URLs, and extract the BSPs. Each map can be prepared on its own; the prepare script only rewrites the maps it is given. No map script or downloaded executable is run.
 
 ```sh
 python scripts/import_source_map.py /path/longjump_source_go_1_1_release.bsp /tmp/imported-source --vpk /path/csgo/pak01_dir.vpk
 python scripts/import_source_map.py /path/kz_longjumps_go11.bsp /tmp/imported-go --vpk /path/csgo/pak01_dir.vpk
-python scripts/prepare_classic_maps.py --source /tmp/imported-source --go /tmp/imported-go
+python scripts/import_source_map.py /path/kz_baxter.bsp /tmp/imported-baxter --vpk /path/csgo/pak01_dir.vpk
+python scripts/prepare_classic_maps.py --source /tmp/imported-source --go /tmp/imported-go --baxter /tmp/imported-baxter
 ```
 
 The first pass exports triangulated brush faces, normals, original texture UVs, packed textures, entity origins and axial solid/player-clip brush collision. The second pass selects practice pads by their original brush coordinates. It clips kz_longjumps_go to a supported static wing and adds browser boundaries at the crop. It never expands, shrinks or relocates the practice blocks. The courtyard has 36 fixed gaps; the GO wing has 10. Textures are lossless WebP with a maximum dimension of 512.
