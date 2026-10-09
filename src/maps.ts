@@ -1,9 +1,9 @@
 import type { Box, Vec } from './physics';
 
 export const maps = [
+  { id: 'kz_baxter', name: 'kz_baxter', detail: 'LJ room · 210–310 units', credits: 'Samuel · LJ room by xq · textures by TopHATTwaffle & Saspatoon', workshop: '1366794864' },
   { id: 'longjump_source_go', name: 'longjump_source_go', detail: 'Courtyard · 225–260 units', credits: 'AZiRES · CS:GO port by badgec / kernel', workshop: '249758765' },
   { id: 'kz_longjumps_go', name: 'kz_longjumps_go', detail: 'Long-jump wing · 240–249 units', credits: 'Draw → THEBUGUSER → badgec / kernel', workshop: '249444895' },
-  { id: 'kz_baxter', name: 'kz_baxter', detail: 'LJ room · 210–310 units', credits: 'Samuel · LJ room by xq · textures by TopHATTwaffle & Saspatoon', workshop: '1366794864' },
 ] as const;
 export type MapId = typeof maps[number]['id'];
 export type Lane = { gap: number; startId: string; endId: string; spawn: Vec; yaw: number };

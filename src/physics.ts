@@ -240,8 +240,11 @@ export class Movement {
   private fullWalkMove(input: Input) {
     const v = this.velocity, half = RULES.gravity * this.dt / 2;
     v.z -= half; // StartGravity
-    // Source rearms manual jumping only after a command without IN_JUMP.
-    // Wheel pulses and release/repress events within a tick cannot bypass that gate.
+    // Source rearms manual jumping only after a command without IN_JUMP. Browser wheel events arrive
+    // about once per frame, so scrolling can set jump on every command; a fresh key press or wheel notch
+    // therefore also rearms it. It counts on this command only: airborne taps never queue a hop for landing,
+    // and holding a jump key (even while scrolling) never auto-hops.
+    if (input.jumpPressed) this.jumpHeld = false;
     if (input.jump) this.checkJumpButton(input); else this.jumpHeld = false;
     if (this.grounded) { v.z = 0; this.fallVelocity = 0; this.friction(); }
     this.checkVelocity();

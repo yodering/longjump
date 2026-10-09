@@ -278,9 +278,9 @@ for (const tickRate of [64, 128] as const) {
     m.velocity.y = 0; m.jumpHeld = true;
     const held = m.renderEye(0.5, { ...idle, jump: true });
     assert.equal(held.z, m.eye(1).z);
-    assert.equal(m.renderEye(0.5, { ...idle, jump: true, jumpPressed: true }).z, held.z);
+    assert.ok(m.renderEye(0.5, { ...idle, jump: true, jumpPressed: true }).z > held.z);
     m.step(idle);
-    assert.ok(m.renderEye(0.5, { ...idle, jump: true, jumpPressed: true }).z > m.eye(1).z);
+    assert.ok(m.renderEye(0.5, { ...idle, jump: true }).z > m.eye(1).z);
   });
   test(`${tickRate}t: render prediction removes the old camera delay without changing movement or jump stats`, () => {
     const m = new Movement(); m.tickRate = tickRate; flat(m);

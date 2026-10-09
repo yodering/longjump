@@ -70,8 +70,17 @@ test('Auto bunnyhop defaults off and restores only boolean preferences', () => {
   assert.equal(normalizeSettings({ autoBhop: 'true' }).autoBhop, false);
 });
 
-test('The classic courtyard is the default and replaces a remembered retired Concrete map', () => {
-  assert.equal(normalizeSettings(null).mapId, 'longjump_source_go');
-  assert.equal(normalizeSettings({ mapId: 'concrete' }).mapId, 'longjump_source_go');
+test('kz_baxter is the default and replaces a remembered retired Concrete map', () => {
+  assert.equal(normalizeSettings(null).mapId, 'kz_baxter');
+  assert.equal(normalizeSettings({ mapId: 'concrete' }).mapId, 'kz_baxter');
   assert.equal(normalizeSettings({ mapId: 'kz_longjumps_go' }).mapId, 'kz_longjumps_go');
+});
+
+test('HUD settings keep the legacy crosshair speed choice and reject invalid values', () => {
+  assert.equal(normalizeSettings(null).hud.speed, 'crosshair');
+  assert.equal(normalizeSettings({ crosshairSpeed: true }).hud.speed, 'crosshair');
+  assert.equal(normalizeSettings({ crosshairSpeed: false }).hud.speed, 'bottom');
+  assert.equal(normalizeSettings({ crosshairSpeed: false, hud: { speed: 'off' } }).hud.speed, 'off');
+  const hud = normalizeSettings({ hud: { speed: 'left', decimals: 3, size: 'xl', color: 'red', offset: 9999, keys: 'no', pb: false } }).hud;
+  assert.deepEqual(hud, { ...normalizeSettings(null).hud, offset: 320, pb: false });
 });
