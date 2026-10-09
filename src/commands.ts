@@ -37,6 +37,18 @@ export class Commands {
     event.at = Math.max(this.time, this.events.at(-1)?.at ?? this.time, event.at);
     this.events.push(event);
   }
+  // Preview the next command without consuming its events or jump pulses.
+  // Rendering may respond before a complete fixed physics interval has elapsed.
+  preview(now: number): UserCommand {
+    const controls = this.simulated.fork();
+    let yaw = this.yaw;
+    for (const event of this.events) {
+      if (event.at > now) break;
+      if (event.kind === 'look') yaw = event.yaw;
+      else controls[event.kind](event.token);
+    }
+    return controls.tick(yaw);
+  }
   advance(now: number, tickRate: 64 | 128, step: (input: UserCommand) => void) {
     const interval = 1000 / tickRate, revision = this.revision;
     // Treat long main-thread suspensions as a pause, without replaying stale jumps.

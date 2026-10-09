@@ -97,7 +97,19 @@ export class Movement {
   // Render ahead from the latest completed command instead of a tick behind it.
   // This is visual prediction only: traces keep the camera out of solid geometry,
   // and the authoritative movement, jump measurements and input ticks never change.
-  renderEye(alpha: number): Vec {
+  renderEye(alpha: number, input?: Input): Vec {
+    if (input && alpha > 0) {
+      // Run one disposable command for the camera. Keep vectors private and
+      // omit jump tracking/callbacks so prediction cannot save or finish attempts.
+      const predicted: Movement = Object.assign(Object.create(Movement.prototype), this, {
+        position: clone(this.position), velocity: clone(this.velocity), jump: null, result: null, onResult: undefined,
+      });
+      predicted.step(input);
+      const eye = predicted.eye(alpha), t = clamp01(alpha);
+      const offset = this.viewOffset + (predicted.viewOffset - this.viewOffset) * t;
+      const end = this.trace(this.position, { x: eye.x, y: eye.y, z: eye.z - offset }, predicted.hullHeight).end;
+      return { x: end.x, y: end.y, z: end.z + offset };
+    }
     const dt = clamp01(alpha) * this.dt, p = this.position, v = this.velocity;
     if (!dt || (this.grounded && !v.x && !v.y && !v.z)) return this.eye(1);
     const target = { x: p.x + v.x * dt, y: p.y + v.y * dt,

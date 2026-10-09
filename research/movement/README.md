@@ -30,7 +30,7 @@ Two small differences were corrected. `CheckVelocity` now clears NaN position an
 
 New tests at both tick rates check the three-dimensional takeoff cap, landing punch boundaries, its next-command exponential decay, landing stamina, and recovery from NaN components. The full suite contains 105 tests.
 
-The camera now extrapolates position from the latest completed tick, with a collision trace, instead of displaying the previous-to-current tick interval. This reduces visual delay but is an approximation: it does not run the next command's acceleration, crouch transition or step movement. It never changes measured jumps. The README and sound-sample note now describe the actual custom thresholds rather than calling them GOKZ defaults.
+At the second pass, the camera extrapolated velocity from the latest completed tick with a collision trace. That reduced visual delay but did not run pending acceleration, crouch transitions or step movement. The input-delay follow-up below replaces that path during play with disposable command prediction. Neither method changes measured jumps. The README and sound-sample note now describe the actual custom thresholds rather than calling them GOKZ defaults.
 
 Run `bun test` and `bun run build` from the repository root.
 
@@ -43,6 +43,18 @@ The browser check verified map loading and the cleaned-up menus. The in-app brow
 Remaining differences include double-precision arithmetic, axis-aligned collision, browser input timing, approximate camera prediction, and incomplete GOKZ statistics. Source's crouch-stuck recovery and quadrant ground traces are also absent. Hard-fall roll, fall damage, footsteps and surface-dependent landing sounds are not implemented. Slopes, ladders, water, moving platforms and non-default surface physics remain outside the controller. Consecutive wheel pulses explicitly rearm manual jumping here; that browser behavior still needs comparison with native command button flags. A claim of exact or near-perfect parity needs game-recorded command/state traces and a side-by-side playtest.
 
 ## Next fidelity work
+
+### Input-delay follow-up: 9 October 2026
+
+A player reported delayed mouse look and jumping. The frame loop used the `requestAnimationFrame` callback timestamp as its input cutoff. That shared timestamp can predate events already delivered when the callback runs, as described in [MDN's timing reference](https://developer.mozilla.org/en-US/docs/Web/API/Window/requestAnimationFrame). The loop now samples `performance.now()` at callback entry, preserving event timestamps and fixed physics intervals while accepting already-delivered inputs.
+
+`Commands.preview` reads pending events into disposable controls without consuming them. `Movement.renderEye` can now simulate one camera-only command and interpolate from the completed state into that prediction. New jump and strafe inputs can affect the next draw even when a complete physics interval has not elapsed. Prediction clones mutable movement vectors, omits existing jump tracking and disables result callbacks. Camera traces still prevent wall penetration. Completed commands, jump statistics and saved records remain independent of render frequency.
+
+Tests cover pending Space/wheel pulses, future-event exclusion, non-consuming previews, callback suppression, held-jump gating and wall contacts. The six-strafe replay now runs camera prediction on every frame and still requires identical commands, positions and results across all frame schedules. The full suite contains 111 tests.
+
+A Bun CPU spot check on this development machine measured prediction at about 0.091 ms median / 0.267 ms p95 on `longjump_source_go`, and 0.029 ms / 0.060 ms on `kz_longjumps_go`, over 1,200 previews per map. These are controller timings, not browser frame times or input-to-display measurements.
+
+World camera angles already use live mouse input without a smoothing filter. Only the knife has the intentional Source viewmodel lag. Raw pointer lock is still requested, with fallback when unsupported. The reporting player's browser, frame rate and GPU timing have not been measured, so mouse latency is not confirmed resolved. High-DPI native resolution and browser frame scheduling remain possible contributors; use a fixed render resolution as a diagnostic before changing graphics defaults.
 
 Capture matched 64- and 128-tick CS:GO/GOKZ runs with tick number, command movement axes, button flags, view angles, origin, velocity, ground state, crouch state and stamina. Include a flat run, six-strafe long jump, early/late duck, repeated wheel hops, landing against a wall and an 18-unit step. Record the game build, map checksum, movement cvars and initial state with each capture.
 

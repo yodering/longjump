@@ -373,7 +373,10 @@ function updateHUD() {
 function view() {
   return { punch: movement.viewPunch, speed: speed(movement.velocity), grounded: movement.grounded, show: settings.viewmodel, leftHand: settings.leftHand };
 }
-function frame(now: number) {
+function frame(_frameTimestamp: number) {
+  // rAF's shared timestamp can predate events already delivered to this callback.
+  // Sample the current clock so those inputs do not wait for another draw.
+  const now = performance.now();
   const dt = Math.min((now - lastTime) / 1000, 0.05); lastTime = now;
   if (locked) {
     commands.advance(now, movement.tickRate, input => {
@@ -383,7 +386,7 @@ function frame(now: number) {
       movement.step(input);
       if (belowMap(classic, movement.position)) { fallTime += 1 / movement.tickRate; if (fallTime > 0.32) { reset(); sounds.play('checkpoint'); } } else fallTime = 0;
     });
-    world.play(movement.renderEye(commands.alpha), yaw, pitch, dt, view());
+    world.play(movement.renderEye(commands.alpha, commands.preview(now)), yaw, pitch, dt, view());
     updateHUD();
   } else if (!started && !settingsPreview) world.preview(now / 1000);
   else world.play(movement.eye(1), yaw, pitch, dt, view());

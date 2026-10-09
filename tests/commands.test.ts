@@ -33,6 +33,52 @@ test('Catch-up ticks receive only the buttons and yaw available at their timesta
   ]);
 });
 
+for (const tickRate of [64, 128] as const) {
+  test(`${tickRate}t: pending Space/wheel jumps render before the next tick without consuming the command`, () => {
+    for (const [kind, token] of [['down', 'Space'], ['pulse', 'WheelDown']] as const) {
+      const m = new Movement(); m.tickRate = tickRate;
+      const c = new Commands(normalizeBindings(null)); c.reset(0, 0);
+      c.button(kind, token, 1);
+      c.advance(4, tickRate, input => m.step(input));
+      assert.equal(m.jump, null);
+      const before = JSON.stringify(m);
+      const input = c.preview(4);
+      assert.equal(input.jump, true); assert.equal(input.jumpPressed, true);
+      assert.ok(m.renderEye(c.alpha, input).z > m.eye(1).z);
+      assert.equal(JSON.stringify(m), before);
+      assert.deepEqual(c.preview(4), input);
+      c.advance(1000 / tickRate, tickRate, command => {
+        assert.deepEqual(command, input); m.step(command);
+      });
+      assert.ok(m.jump);
+    }
+  });
+}
+
+test('Prediction uses pending axes/yaw but never future events or duplicate jump callbacks', () => {
+  const c = new Commands(normalizeBindings(null)); c.reset(0, 0);
+  c.button('down', 'KeyD', 2); c.look(0.2, 3); c.button('pulse', 'WheelDown', 20);
+  const preview = c.preview(4);
+  assert.equal(preview.side, 0.5); assert.equal(preview.yaw, 0.2); assert.equal(preview.jump, false);
+  const m = new Movement(); m.position.z = 1; m.grounded = false; m.velocity.z = -100;
+  m.jump = { start: { ...m.position }, preSpeed: 250, maxSpeed: 250, ticks: 80, synced: 80,
+    overlap: 0, deadAir: 0, height: 55, lastYaw: 0, strafes: [], path: [{ ...m.position }],
+    startPlatform: m.platform, edge: 0, ducked: false, valid: true };
+  let calls = 0; m.onResult = () => calls++;
+  const before = JSON.stringify(m);
+  m.renderEye(0.75, preview);
+  assert.equal(calls, 0); assert.equal(JSON.stringify(m), before);
+});
+
+test('Current callback time accepts delivered input that the older rAF timestamp would defer', () => {
+  const c = new Commands(normalizeBindings(null)); c.reset(0, 0);
+  c.button('pulse', 'WheelDown', 14);
+  const commands: UserCommand[] = [];
+  // A callback stamped 10 ms actually runs at 17 ms, after the input arrived.
+  c.advance(17, 128, command => commands.push(command));
+  assert.equal(commands.length, 2); assert.equal(commands[1].jump, true);
+});
+
 // A deterministic manual six-strafe command recording, including run-up,
 // releasing W, changing A/D, wheel jump and a late duck. Feed browser events
 // before each draw exactly as the real event handlers do.
@@ -64,6 +110,7 @@ function replay(tickRate: 64 | 128, frameDurations: number[]) {
       commands.push(input); m.step(input);
       positions.push([m.position.x, m.position.y, m.position.z, speed(m.velocity), m.stamina]);
     });
+    m.renderEye(c.alpha, c.preview(now));
   }
   return { commands, positions, result: m.result };
 }

@@ -267,6 +267,19 @@ test('Half-strength press and subsequent held strafe count as one strafe', () =>
 });
 
 for (const tickRate of [64, 128] as const) {
+  test(`${tickRate}t: command prediction respects walls and the held-jump gate`, () => {
+    const m = new Movement(); m.tickRate = tickRate; flat(m);
+    m.boxes.push({ id: 'wall', min: { x: -100, y: -220, z: 0 }, max: { x: 100, y: -200, z: 200 } });
+    m.velocity.y = 250;
+    const before = JSON.stringify(m);
+    const eye = m.renderEye(0.99, { ...idle, forward: 1 });
+    assert.ok(eye.y <= -220 - RULES.hull - DIST_EPSILON);
+    assert.equal(JSON.stringify(m), before);
+    m.velocity.y = 0; m.jumpHeld = true;
+    const held = m.renderEye(0.5, { ...idle, jump: true });
+    assert.equal(held.z, m.eye(1).z);
+    assert.ok(m.renderEye(0.5, { ...idle, jump: true, jumpPressed: true }).z > held.z);
+  });
   test(`${tickRate}t: render prediction removes the old camera delay without changing movement or jump stats`, () => {
     const m = new Movement(); m.tickRate = tickRate; flat(m);
     for (let i = 0; i < tickRate; i++) m.step({ ...idle, forward: 1 });
