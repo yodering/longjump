@@ -1,0 +1,5 @@
+player_ct.glb / player_t.glb: CS:GO's ST6 (CT) and Phoenix (T) third-person player models, their default knives
+and player animations by Valve, converted from Steam depot 731 (manifest 1224088799001669801) by scripts/import_players.py.
+Valve assets retain their original owners' rights. No new asset license is assigned.
+
+Source files, conversion steps and SHA-256 hashes: research/players/README.md and provenance.json.

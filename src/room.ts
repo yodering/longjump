@@ -1,7 +1,7 @@
 import type { Identity } from './identity';
 import type { Result, Vec } from './physics';
 
-export type RoomPose = { id: string; p: [number, number, number]; v: [number, number, number]; yaw: number; pitch: number; g: boolean; d: number; r: boolean };
+export type RoomPose = { id: string; p: [number, number, number]; v: [number, number, number]; yaw: number; pitch: number; g: boolean; d: number; r: boolean; m: 'ct' | 't' };
 export type RoomJump = { id: string; name: string; tick: 64 | 128; auto: boolean; distance: number; sync: number; pre: number; max: number;
   height: number; width: number; strafes: number; ticks: number; overlap: number; deadAir: number; edge: number | null };
 export type RoomStatus = 'idle' | 'connecting' | 'open' | 'retrying';
@@ -91,11 +91,11 @@ export class RoomClient {
   private send(message: unknown) { if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(message)); }
   /** Marks the next pose as a teleport so others snap instead of sliding. */
   reset() { this.resetPending = true; }
-  pose(now: number, position: Vec, velocity: Vec, yaw: number, pitch: number, grounded: boolean, duck: number) {
+  pose(now: number, position: Vec, velocity: Vec, yaw: number, pitch: number, grounded: boolean, duck: number, team: 'ct' | 't') {
     if (!this.connected || now - this.lastPoseAt < POSE_INTERVAL_MS) return;
     const round = (n: number) => Math.round(n * 100) / 100;
     const pose = { p: [round(position.x), round(position.y), round(position.z)], v: [round(velocity.x), round(velocity.y), round(velocity.z)],
-      yaw: Math.round(yaw * 1e4) / 1e4, pitch: Math.round(pitch * 1e4) / 1e4, g: grounded, d: Math.round(duck * 100) / 100 };
+      yaw: Math.round(yaw * 1e4) / 1e4, pitch: Math.round(pitch * 1e4) / 1e4, g: grounded, d: Math.round(duck * 100) / 100, m: team };
     const text = JSON.stringify(pose);
     if (text === this.lastPose && !this.resetPending && now - this.lastPoseAt < IDLE_POSE_MS) return;
     this.lastPoseAt = now; this.lastPose = text;

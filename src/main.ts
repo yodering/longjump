@@ -129,7 +129,7 @@ app.innerHTML = `
     <section class="about-credits" aria-labelledby="asset-credits-title">
       <h3 id="asset-credits-title">Assets &amp; interface</h3>
       <ul class="credits-list">
-        <li>Valve: original map materials, knife and arms, and game sounds.</li>
+        <li>Valve: original map materials, knife and arms, player models and animations, and game sounds.</li>
         <li><a href="https://github.com/KZGlobalTeam/gokz" target="_blank" rel="noreferrer">GOKZ</a>: announcer sounds. <a href="https://github.com/sourcesounds/csgo" target="_blank" rel="noreferrer">sourcesounds/csgo</a>: Valve sound recordings.</li>
         <li><a href="https://www.graphicalui.com/" target="_blank" rel="noreferrer">Graphical</a>: UI theme. <a href="https://rsms.me/inter/" target="_blank" rel="noreferrer">Inter</a>: typeface. <a href="https://lucide.dev/" target="_blank" rel="noreferrer">Lucide</a>: icons.</li>
       </ul>
@@ -483,7 +483,7 @@ function frame(_frameTimestamp: number) {
     updateHUD();
   } else if (!started && !settingsPreview) { remote.update(now, world.camera); world.preview(now / 1000); }
   else { remote.update(now, world.camera); world.play(movement.eye(1), yaw, pitch, dt, view()); }
-  room.pose(now, movement.position, movement.velocity, yaw, pitch, movement.grounded, movement.duckAmount);
+  room.pose(now, movement.position, movement.velocity, yaw, pitch, movement.grounded, movement.duckAmount, settings.team);
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

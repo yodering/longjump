@@ -1,0 +1,276 @@
+{
+  "steamApp": 740,
+  "steamDepot": 731,
+  "depotManifest": "1224088799001669801",
+  "manifestDate": "2023-10-12",
+  "description": "Final CS:GO (legacy) shared content, downloaded anonymously with SteamRE/DepotDownloader 3.4.0.",
+  "sourceFiles": [
+    {
+      "path": "materials/models/player/ct_st6/st6_face.vmt",
+      "bytes": 449,
+      "sha256": "132849e0504de12b909e4e4e7539632621379cb1e64ef1dfe39ebc50723c8b78"
+    },
+    {
+      "path": "materials/models/player/ct_st6/st6_face.vtf",
+      "bytes": 699296,
+      "sha256": "5c01587253c0101a25a8a94ef8ac19d9e39c82500901c54e15f28ca29b98f7ee"
+    },
+    {
+      "path": "materials/models/player/ct_st6/st6_face_normal.vtf",
+      "bytes": 1398360,
+      "sha256": "5983cefe4d47b4bbc7111f2855dfc3289e47981f0cdd955fd6379ccc80916632"
+    },
+    {
+      "path": "materials/models/player/ct_st6/st6_glasslens.vmt",
+      "bytes": 214,
+      "sha256": "8f21dcd5c2e875d8dc20d97e96fd873d7d33fbcaee4513781b3ed29c4a202d93"
+    },
+    {
+      "path": "materials/models/player/ct_st6/st6_glasslens.vtf",
+      "bytes": 87640,
+      "sha256": "c766809a0cc964f74fecdc7b0493b2b3d07a3de04a8c1a743b297ccc8d44eabb"
+    },
+    {
+      "path": "materials/models/player/ct_st6/st6_lowerbody.vmt",
+      "bytes": 463,
+      "sha256": "676e5a29711533564d331f6991c05d6b435c752643fc1c09beefd6454378851a"
+    },
+    {
+      "path": "materials/models/player/ct_st6/st6_lowerbody.vtf",
+      "bytes": 699296,
+      "sha256": "083d426cbe5e49af53473eaf29cbffdcb8118e9fea304ce05bb7e732f932143b"
+    },
+    {
+      "path": "materials/models/player/ct_st6/st6_lowerbody_normal.vtf",
+      "bytes": 1398360,
+      "sha256": "b90cf43fbfffc23dc74d2f170d3fb391390550bbfed8133bc32cbaaa20b12398"
+    },
+    {
+      "path": "materials/models/player/ct_st6/st6_upperbody.vmt",
+      "bytes": 459,
+      "sha256": "7c3bf468bbad473cc62bc8a5dcc488a771f6a737323c8ad065818547e2e2bd66"
+    },
+    {
+      "path": "materials/models/player/ct_st6/st6_upperbody.vtf",
+      "bytes": 699296,
+      "sha256": "334b43e72a39df97f0ed5b3c27a07bb7ed19250be66804dc7ec0a19845fc1bb7"
+    },
+    {
+      "path": "materials/models/player/ct_st6/st6_upperbody_normal.vtf",
+      "bytes": 1398360,
+      "sha256": "60b11abb56536dced517ce52810eabb4d5c4e7c551ba580e31d4de878616cd7f"
+    },
+    {
+      "path": "materials/models/player/custom_player/econ/body/tm_phoenix/tm_phoenix_body_normal.vtf",
+      "bytes": 1398360,
+      "sha256": "1c4fb4ecb0b370809c2207d1187cbf546b9e96a7ac6343f05f697add193a7d1b"
+    },
+    {
+      "path": "materials/models/player/custom_player/econ/body/tm_phoenix/tm_phoenix_legs_normal.vtf",
+      "bytes": 699256,
+      "sha256": "9e8160668a59ef3645b88f0d5dd56dd1374993b133fb0d01ed106c9d33e9dbb6"
+    },
+    {
+      "path": "materials/models/player/custom_player/econ/body/tm_phoenix/tm_phoenix_v2_body_variante.vmt",
+      "bytes": 1176,
+      "sha256": "e98306475e53bd77f3c56e8dcd842be84bcf60b5465a5f12f3d313a5f8ecae41"
+    },
+    {
+      "path": "materials/models/player/custom_player/econ/body/tm_phoenix/tm_phoenix_v2_body_variante_color.vtf",
+      "bytes": 699296,
+      "sha256": "a0d66bb5fbd84a362da8d332a216faa90d382ac269f8bae7d61b20928add94c5"
+    },
+    {
+      "path": "materials/models/player/custom_player/econ/body/tm_phoenix/tm_phoenix_v2_legs_variantb.vmt",
+      "bytes": 1176,
+      "sha256": "ed83c03d0ae2eba38332af4e1646746fd954678ef705e3793e1d4cfe10da7698"
+    },
+    {
+      "path": "materials/models/player/custom_player/econ/body/tm_phoenix/tm_phoenix_v2_legs_variantb_color.vtf",
+      "bytes": 349712,
+      "sha256": "17fe86af691b1473b83c39fc5610a8f1ef2f20df37f6c7cf227298862de96d65"
+    },
+    {
+      "path": "materials/models/player/custom_player/econ/head/tm_phoenix/tm_phoenix_v2_balaclava_normal.vtf",
+      "bytes": 1398360,
+      "sha256": "ed05616cac7c346235579e95e5324a5459d299365c052f97857d5f4c7cc3b368"
+    },
+    {
+      "path": "materials/models/player/custom_player/econ/head/tm_phoenix/tm_phoenix_v2_balaclava_varianta.vmt",
+      "bytes": 1205,
+      "sha256": "ed72aad585a174ee6d120ffa1a03d2b7dc865969712133fc3b94af5b69a021e6"
+    },
+    {
+      "path": "materials/models/player/custom_player/econ/head/tm_phoenix/tm_phoenix_v2_balaclava_varianta_color.vtf",
+      "bytes": 699296,
+      "sha256": "1dc5e06a712c413112c4f27fda682da0e49c434f4651df6182d9118b4aee4bd3"
+    },
+    {
+      "path": "materials/models/weapons/v_models/arms/bare/bare_arm_133.vmt",
+      "bytes": 752,
+      "sha256": "5ed93c69d6c510a1a9b993af6d8bfe5a7aec1fb70cd2734d572b0a98fea18ca6"
+    },
+    {
+      "path": "materials/models/weapons/v_models/arms/bare/bare_arm_133.vtf",
+      "bytes": 2796408,
+      "sha256": "83dd98a92c224ba7afdb8e9d7e5c763eed74ca64daa40979bfe23c788b3ac900"
+    },
+    {
+      "path": "materials/models/weapons/v_models/arms/bare/bare_arm_133_normal.vtf",
+      "bytes": 2796408,
+      "sha256": "1af1e320437f787ba4d609f42f11a83a77980d6a7318bfd3ecc0538c36984a29"
+    },
+    {
+      "path": "materials/models/weapons/w_models/arms/t_base_fullfinger_glove.vmt",
+      "bytes": 594,
+      "sha256": "fdccbb269e722e16d26b45751a249f754242dd745230ea45ebfb63a65d6d306e"
+    },
+    {
+      "path": "materials/models/weapons/w_models/arms/w_ct_base_glove.vmt",
+      "bytes": 512,
+      "sha256": "bc5b5caf5c093ae0b6c06b522df4685047ada3198eaa9d4732cf6030beb8d958"
+    },
+    {
+      "path": "materials/models/weapons/w_models/arms/w_ct_base_glove_color.vtf",
+      "bytes": 43936,
+      "sha256": "88cd35d3d04f8a757dbfc3590229eae3dd68d9938151c42f6e234ff683177c22"
+    },
+    {
+      "path": "materials/models/weapons/w_models/arms/w_ct_base_glove_normal.vtf",
+      "bytes": 87640,
+      "sha256": "52923774f310a4289c966516dbccf8af538097f7d6935718dd79bc52eeda4d5a"
+    },
+    {
+      "path": "materials/models/weapons/w_models/arms/w_t_base_fullfinger_glove_color.vtf",
+      "bytes": 87640,
+      "sha256": "50bb03333884cba18742ed55de009b69459290e47c10d4f1f68b094b47bb083d"
+    },
+    {
+      "path": "materials/models/weapons/w_models/arms/w_t_base_fullfinger_glove_normal.vtf",
+      "bytes": 87640,
+      "sha256": "3db3c059fea827d411b9d1a5d0eee9c15fa2529d89ef3e9342a274729fc9853b"
+    },
+    {
+      "path": "materials/models/weapons/w_models/w_knife_ct/knife_ct.vmt",
+      "bytes": 483,
+      "sha256": "d96916fc039b27c2624dd10f52141890d9dc2a4744212c70cd21d61e01fb495c"
+    },
+    {
+      "path": "materials/models/weapons/w_models/w_knife_ct/knife_ct.vtf",
+      "bytes": 87640,
+      "sha256": "cfda9ea05eb44c737a5b24f8623dc2365cb57884f4f5ac70fefa423d6aa76b7f"
+    },
+    {
+      "path": "materials/models/weapons/w_models/w_knife_t/knife_t.vmt",
+      "bytes": 85,
+      "sha256": "0ed0b99253612a159cfcd4b164c10813c9c085b4237c7087ad46fa6f558be748"
+    },
+    {
+      "path": "materials/models/weapons/w_models/w_knife_t/knife_t.vtf",
+      "bytes": 349784,
+      "sha256": "413e8a5615d8600387641e393bc8108df00e99fc06da758ff25815c0a023406d"
+    },
+    {
+      "path": "models/player/custom_player/animset_ct.dx90.vtx",
+      "bytes": 72,
+      "sha256": "56324b5076a4eb94136538701888f701e5adc15bea1abff3f4d5862577a6ba79"
+    },
+    {
+      "path": "models/player/custom_player/animset_ct.mdl",
+      "bytes": 5267784,
+      "sha256": "352017e77211d9ad2ee9eb17d239b59904c5eadeff95719cfd1f27ab2a4c39d8"
+    },
+    {
+      "path": "models/player/custom_player/animset_ct.vvd",
+      "bytes": 64,
+      "sha256": "e920444c11342deabddbbdac7d9a6253f424d0e233a4dadea27b67cc99bcb9d6"
+    },
+    {
+      "path": "models/player/custom_player/animset_t.dx90.vtx",
+      "bytes": 72,
+      "sha256": "8ba2a87c29cbb142504363c7c51b5686cc402ae43d7d583bea460082e0800eb4"
+    },
+    {
+      "path": "models/player/custom_player/animset_t.mdl",
+      "bytes": 5264448,
+      "sha256": "e09c2703debcc1919c0de393d359103fd175734e5576f1b0a143fa18d4e6dd49"
+    },
+    {
+      "path": "models/player/custom_player/animset_t.vvd",
+      "bytes": 64,
+      "sha256": "9d3162dd8c7fc12997913a34ca205c480318c19c641756d46bab070f6ceeee68"
+    },
+    {
+      "path": "models/player/custom_player/legacy/ctm_st6.dx90.vtx",
+      "bytes": 208849,
+      "sha256": "63336a56748ebb79d5e5b21e4fb3cedf9d4840957c7002b97bda8d1ee9d1bdb6"
+    },
+    {
+      "path": "models/player/custom_player/legacy/ctm_st6.mdl",
+      "bytes": 42948,
+      "sha256": "4c29c4a34cac5fc0575f7c3060c8a2649cbf2cdcb87a1bc2266bea6c1cbe428d"
+    },
+    {
+      "path": "models/player/custom_player/legacy/ctm_st6.vvd",
+      "bytes": 775232,
+      "sha256": "0206cac8aaed89ee709674f928b684d0bae525eceafbb8b16c5fc30ee9b9a639"
+    },
+    {
+      "path": "models/player/custom_player/legacy/tm_phoenix.dx90.vtx",
+      "bytes": 211106,
+      "sha256": "cccd844f7531a7fb215603dc9a4c43ba540310d1dda02a2e0fb86c5907c43dd8"
+    },
+    {
+      "path": "models/player/custom_player/legacy/tm_phoenix.mdl",
+      "bytes": 41992,
+      "sha256": "0759190f479d6fcc1a96e4e3de90c759c64d7c4335d961b61e2447ae7d022d0f"
+    },
+    {
+      "path": "models/player/custom_player/legacy/tm_phoenix.vvd",
+      "bytes": 749056,
+      "sha256": "f648d9f76a7bd975b7870ebe379f30fd64b1d4f33acd6fde2e9fba8500c2d02f"
+    },
+    {
+      "path": "models/weapons/w_knife_default_ct.dx90.vtx",
+      "bytes": 19112,
+      "sha256": "5651314b6655c377c57d247b89690da2e9b2b81080ea7f50f2b9b72e8750f3b6"
+    },
+    {
+      "path": "models/weapons/w_knife_default_ct.mdl",
+      "bytes": 35488,
+      "sha256": "be9a98194f417c783f3a313cb544226176e5d462198c4cb9d8d05669892ebe37"
+    },
+    {
+      "path": "models/weapons/w_knife_default_ct.vvd",
+      "bytes": 88576,
+      "sha256": "4b64369bab6192459449e16cbb346062fe2b8755785f8146248324b650e89643"
+    },
+    {
+      "path": "models/weapons/w_knife_default_t.dx90.vtx",
+      "bytes": 13892,
+      "sha256": "592d2adad1dbf2bb6e5b0137eabcebccd55e5a8a67878113556c578dc5f705b6"
+    },
+    {
+      "path": "models/weapons/w_knife_default_t.mdl",
+      "bytes": 35484,
+      "sha256": "6364acf112b0d00147d9220283f1eaef5b65ab23aadf1b7d3bd974488ffe873b"
+    },
+    {
+      "path": "models/weapons/w_knife_default_t.vvd",
+      "bytes": 57856,
+      "sha256": "9d7702e25a4332367c11a706fe933ee3a2c85ac3192137ebfb3ef9232b4c3751"
+    }
+  ],
+  "outputs": [
+    {
+      "path": "public/players/player_ct.glb",
+      "bytes": 2994088,
+      "sha256": "e2a08dad35a848b5f833ed7303f2d5f61da1527c564a473b16ed19aeb0c4d862"
+    },
+    {
+      "path": "public/players/player_t.glb",
+      "bytes": 3277188,
+      "sha256": "8dc154b11a764eea58d0589e7d45ac365d3bab280e0d1d9b22d5f92cdd85fedd"
+    }
+  ]
+}

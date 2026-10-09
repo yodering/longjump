@@ -18,7 +18,7 @@ Done when the leaderboard is deployed, real jumps from both maps and tick rates 
 
 ## 2. Shared practice rooms
 
-**Status, October 2026:** the first version is built: invite links, 8-player rooms on a shared map, server-assigned names, capsule stand-ins with name labels, 20 Hz pose relay with interpolation, and jump announcements in the in-game feed. See the [server README](../../server/README.md#rooms). Third-person player models, and latency tests at 30/80/150 ms RTT, remain open.
+**Status, October 2026:** the first version is built: invite links, 8-player rooms on a shared map, server-assigned names, capsule stand-ins with name labels, 20 Hz pose relay with interpolation, and jump announcements in the in-game feed. See the [server README](../../server/README.md#rooms). Third-person CS:GO player models (ST6 and Phoenix with their knives, baked locomotion, crouch and jump clips) replaced the capsules; see [player models](../players/README.md). Latency tests at 30/80/150 ms RTT remain open.
 
 The first multiplayer release should let friends practice on the same map and see one another. Invite links, a small room list, leaderboard names and jump announcements are enough. Joining asks for a name when the browser has none, using the same claim as the leaderboard. Start with at most eight players, no player collisions, and no chat or voice. Public discovery and moderation can follow private rooms.
 

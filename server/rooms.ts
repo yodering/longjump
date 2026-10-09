@@ -13,7 +13,7 @@ const CODE_ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
 const POSITION_LIMIT = 65_536, SPEED_LIMIT = 4_000;
 
 export type RoomSocket = ServerWebSocket<{ address: string; member?: Member }>;
-type Pose = { p: [number, number, number]; v: [number, number, number]; yaw: number; pitch: number; g: boolean; d: number; r: boolean };
+type Pose = { p: [number, number, number]; v: [number, number, number]; yaw: number; pitch: number; g: boolean; d: number; r: boolean; m: 'ct' | 't' };
 type Member = { id: string; name: string; room: Room; ws: RoomSocket; pose: Pose | null; dirty: boolean; poses: number[]; jumps: number[] };
 type Room = { code: string; mapId: string; members: Map<string, Member>; emptySince: number | null };
 export type RoomsConfig = { db: Database; physicsVersion: string; mapIds: string[]; now?: () => number };
@@ -81,7 +81,8 @@ export function createRooms(config: RoomsConfig) {
       || typeof input.g !== 'boolean' || !finite(input.d, 1) || input.d < 0) return;
     // A reset stays marked until the next snapshot carries it, so remote views snap instead of sliding.
     const reset = input.r === true || (member.dirty && member.pose?.r === true);
-    member.pose = { p: input.p, v: input.v, yaw: input.yaw, pitch: input.pitch, g: input.g, d: input.d, r: reset };
+    // m picks the CT or T player model, following the sender's knife setting.
+    member.pose = { p: input.p, v: input.v, yaw: input.yaw, pitch: input.pitch, g: input.g, d: input.d, r: reset, m: input.m === 't' ? 't' : 'ct' };
     member.dirty = true;
   }
 

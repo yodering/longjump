@@ -41,7 +41,7 @@ function start() {
   }
   return { app, claim, connect };
 }
-const pose = (x: number, extra: Message = {}) => ({ t: 'pose', p: [x, 0, 0], v: [0, 250, 0], yaw: 1, pitch: 0, g: true, d: 0, ...extra });
+const pose = (x: number, extra: Message = {}) => ({ t: 'pose', p: [x, 0, 0], v: [0, 250, 0], yaw: 1, pitch: 0, g: true, d: 0, m: 't', ...extra });
 
 test('Players create a room, join by code, see each other and leave', async () => {
   const s = start(), a = await s.connect({ key: await s.claim('Alpha'), create: true });
@@ -64,7 +64,7 @@ test('Poses are relayed to others in bounded snapshots, never back to the sender
   assert.equal(snapshot.players.length, 1);
   assert.equal(snapshot.players[0].id, you);
   // Only the latest pose is relayed, and a reset in between still makes the view snap.
-  assert.deepEqual(snapshot.players[0].p, [6, 0, 0]); assert.equal(snapshot.players[0].r, true);
+  assert.deepEqual(snapshot.players[0].p, [6, 0, 0]); assert.equal(snapshot.players[0].r, true); assert.equal(snapshot.players[0].m, 't');
   // A burst beyond 40 poses per second is dropped instead of queued.
   await new Promise(resolve => setTimeout(resolve, 1100));
   for (let i = 100; i < 200; i++) b.send(pose(i));
