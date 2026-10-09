@@ -36,3 +36,37 @@ test('Alternate bindings release independently and pause clears held, blocked an
   controls.up('ControlLeft'); assert.equal(controls.tick(0).duck, true);
   controls.down('Space'); controls.clear(); assert.equal(controls.tick(0).duck, false); assert.equal(controls.tick(0).jump, false);
 });
+
+for (const tickRate of [64, 128]) {
+  test(`${tickRate}t: consecutive scroll commands can bhop, but stopping scroll never auto-hops`, () => {
+    const controls = new Controls(normalizeBindings(null));
+    const movement = new Movement(); movement.tickRate = tickRate;
+    movement.boxes = [{ id: 'floor', min: { x: -2000, y: -2000, z: -100 }, max: { x: 2000, y: 2000, z: 0 } }];
+    let takeoffs = 0;
+    for (let i = 0; i < tickRate * 3; i++) {
+      const grounded = movement.grounded;
+      controls.pulse('WheelDown'); movement.step(controls.tick(0));
+      if (grounded && !movement.grounded) takeoffs++;
+    }
+    assert.ok(takeoffs >= 3, `Expected repeated manual hops, got ${takeoffs}`);
+    for (let i = 0; i < tickRate * 2; i++) movement.step(controls.tick(0));
+    assert.equal(movement.grounded, true);
+    assert.equal(movement.autoBhop, false);
+  });
+  test(`${tickRate}t: an airborne scroll does not buffer a hop and scrolling under held Space does not rearm it`, () => {
+    const controls = new Controls(normalizeBindings(null));
+    const movement = new Movement(); movement.tickRate = tickRate;
+    controls.pulse('WheelUp'); movement.step(controls.tick(0));
+    controls.pulse('WheelUp'); movement.step(controls.tick(0));
+    for (let i = 0; i < tickRate * 2; i++) movement.step(controls.tick(0));
+    assert.equal(movement.grounded, true);
+    controls.down('Space'); movement.step(controls.tick(0));
+    assert.equal(movement.grounded, false);
+    for (let i = 0; i < tickRate * 2; i++) {
+      controls.pulse('WheelDown'); movement.step(controls.tick(0));
+    }
+    assert.equal(movement.grounded, true);
+    controls.up('Space'); controls.down('Space'); movement.step(controls.tick(0));
+    assert.equal(movement.grounded, false);
+  });
+}

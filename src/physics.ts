@@ -10,7 +10,7 @@ export const RULES = { gravity: 800, jumpImpulse: 301.993377, maxSpeed: 250, acc
 export const DIST_EPSILON = 0.03125;
 export type Vec = { x: number; y: number; z: number };
 export type Box = { min: Vec; max: Vec; id: string };
-export type Input = { forward: number; side: number; jump: boolean; duck: boolean; walk: boolean; yaw: number; overlap?: boolean };
+export type Input = { forward: number; side: number; jump: boolean; duck: boolean; walk: boolean; yaw: number; overlap?: boolean; jumpPressed?: boolean };
 export type Strafe = { direction: number; ticks: number; synced: number; gain: number; loss: number; maxSpeed: number; width: number };
 export type Jump = { start: Vec; preSpeed: number; maxSpeed: number; ticks: number; synced: number; overlap: number; deadAir: number;
   height: number; lastYaw: number; strafes: Strafe[]; path: Vec[]; startPlatform: string; edge: number | null; ducked: boolean; valid: boolean };
@@ -217,6 +217,9 @@ export class Movement {
   private fullWalkMove(input: Input) {
     const v = this.velocity, half = RULES.gravity * this.dt / 2;
     v.z -= half; // StartGravity
+    // A wheel notch or a new key press is a fresh tap even when the previous command also jumped.
+    // It is consumed on this command only; airborne taps never queue a jump for landing.
+    if (input.jumpPressed) this.jumpHeld = false;
     if (input.jump) this.checkJumpButton(input); else this.jumpHeld = false;
     if (this.grounded) { v.z = 0; this.fallVelocity = 0; this.friction(); }
     this.checkVelocity();

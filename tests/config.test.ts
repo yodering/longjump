@@ -69,3 +69,9 @@ test('Auto bunnyhop defaults off and restores only boolean preferences', () => {
   assert.equal(normalizeSettings({ autoBhop: false }).autoBhop, false);
   assert.equal(normalizeSettings({ autoBhop: 'true' }).autoBhop, false);
 });
+
+test('The classic courtyard is the default and replaces a remembered retired Concrete map', () => {
+  assert.equal(normalizeSettings(null).mapId, 'longjump_source_go');
+  assert.equal(normalizeSettings({ mapId: 'concrete' }).mapId, 'longjump_source_go');
+  assert.equal(normalizeSettings({ mapId: 'kz_longjumps_go' }).mapId, 'kz_longjumps_go');
+});

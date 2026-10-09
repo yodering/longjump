@@ -303,3 +303,8 @@ body.playing .jump-details { display: none; }
 #about .credits-list p { margin: var(--space-xxs) 0 0; color: var(--neutral-7); }
 #about .credits-list a { color: var(--neutral-10); text-underline-offset: var(--space-xxs); }
 #about .about-note { margin: var(--space-l) 0 0; color: var(--neutral-7); }
+
+.hud-pb { color: var(--neutral-7); font-size: var(--size-xs); line-height: var(--line-xs); letter-spacing: var(--letter-spacing-xs); }
+.session-entry>div { flex-direction: column; align-items: flex-start; gap: var(--space-xxs); }
+
+.session-entry>span { flex-direction: column; align-items: flex-end; gap: var(--space-xxs); }

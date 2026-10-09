@@ -3,7 +3,6 @@ import type { Box, Vec } from './physics';
 export const maps = [
   { id: 'longjump_source_go', name: 'longjump_source_go', detail: 'Courtyard · 225–260 units', credits: 'AZiRES · CS:GO port by badgec / kernel', workshop: '249758765' },
   { id: 'kz_longjumps_go', name: 'kz_longjumps_go', detail: 'Long-jump wing · 240–249 units', credits: 'Draw → THEBUGUSER → badgec / kernel', workshop: '249444895' },
-  { id: 'concrete', name: 'Concrete', detail: '220–260 units', credits: 'VNL', workshop: '' },
 ] as const;
 export type MapId = typeof maps[number]['id'];
 export type Lane = { gap: number; startId: string; endId: string; spawn: Vec; yaw: number };
@@ -27,7 +26,6 @@ export type MapLightingData = { root: number; nodes: [number, number, number][];
   leafSamples: Record<string, [number, number]>; lights: WorldLight[] };
 const cache = new Map<MapId, ImportedMap>();
 export async function loadMap(id: MapId) {
-  if (id === 'concrete') return null;
   const existing = cache.get(id); if (existing) return existing;
   const response = await fetch(`${import.meta.env.BASE_URL}maps/${id}/map.json`);
   if (!response.ok) throw new Error(`Map download failed (${response.status})`);

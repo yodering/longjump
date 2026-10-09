@@ -54,12 +54,14 @@ export class Controls {
   private pulses = new Set<Action>();
   private pressed = new Set<Action>();
   private released = new Set<Action>();
+  private jumpPressed = false;
   bindings: Bindings;
   constructor(bindings: Bindings) { this.bindings = bindings; }
   action(token: string) { return (Object.keys(actions) as Action[]).find(a => this.bindings[a].includes(token)); }
   down(token: string): Action | undefined {
     if (this.held.has(token)) return;
     const action = this.action(token);
+    if ((action === 'jump' || action === 'longJump') && !this.active('jump') && !this.active('longJump')) this.jumpPressed = true;
     if (action && !this.active(action)) this.pressed.add(action);
     this.held.add(token);
     if (action === 'longJump') this.cancelForward();
@@ -74,6 +76,7 @@ export class Controls {
   }
   pulse(token: string): Action | undefined {
     const action = this.action(token);
+    if ((action === 'jump' || action === 'longJump') && !this.active('jump') && !this.active('longJump')) this.jumpPressed = true;
     if (action === 'longJump') this.cancelForward();
     if (action) {
       this.pulses.add(action);
@@ -88,7 +91,7 @@ export class Controls {
   }
   active(action: Action) { return this.bindings[action].some(token => this.held.has(token) && !this.blocked.has(token)); }
   clear() { this.held.clear(); this.blocked.clear(); this.clearPulses(); }
-  clearPulses() { this.pulses.clear(); this.pressed.clear(); this.released.clear(); }
+  clearPulses() { this.pulses.clear(); this.pressed.clear(); this.released.clear(); this.jumpPressed = false; }
   fork() {
     const copy = new Controls(this.bindings);
     copy.held = new Set(this.held); copy.blocked = new Set(this.blocked);
@@ -98,7 +101,7 @@ export class Controls {
     const on = (a: Action) => this.active(a) || this.pulses.has(a);
     const lj = on('longJump'), left = on('left'), right = on('right');
     return { forward: Number(on('forward')) - Number(on('back')), side: Number(right) - Number(left),
-      overlap: left && right, jump: on('jump') || lj, duck: on('duck') || lj, walk: on('walk'), yaw, lj };
+      overlap: left && right, jump: on('jump') || lj, jumpPressed: this.jumpPressed, duck: on('duck') || lj, walk: on('walk'), yaw, lj };
   }
   tick(yaw: number) {
     const input = this.snapshot(yaw);

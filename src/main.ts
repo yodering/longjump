@@ -3,10 +3,10 @@ import { createIcons, Play, Maximize, ArrowLeftRight, X } from 'lucide';
 import { Movement, speed, type Result, type Vec } from './physics';
 import { World } from './world';
 import { maps, loadMap, type MapId, type ImportedMap } from './maps';
-import { mapEntry, mapLanes, blockAt, belowMap, CONCRETE_GAP, concreteBoxes, type Position } from './practice';
+import { mapEntry, mapLanes, blockAt, belowMap, CONCRETE_GAP, type Position } from './practice';
 import { Sounds } from './sounds';
 import { soundTiers, jumpSound, type Sound } from './sound-tiers';
-import { readHistory, type Entry } from './history';
+import { readHistory, readBests, saveBest, sameCategory, type Entry } from './history';
 import { normalizeSettings } from './settings';
 import { tokenLabel, type Action } from './bindings';
 import { Commands, PITCH_LIMIT, lockMouse } from './commands';
@@ -24,6 +24,11 @@ window.setInterval(() => engagement.flush(), 30_000);
 window.addEventListener('pagehide', () => engagement.setPlaying(false));
 document.documentElement.dataset.mode = settings.appearance;
 let history = readHistory(read<unknown>('vnl-history', []));
+let records = readBests(read<unknown>('vnl-bests', []), history);
+const category = (ljBind = false) => ({ mapId: settings.mapId, tickRate: settings.tickRate, autoBhop: settings.autoBhop, ljBind });
+const best = (ljBind = false) => records.find(record => sameCategory(record, category(ljBind)))?.distance ?? 0;
+function writeRecords() { try { localStorage.setItem('vnl-bests', JSON.stringify(records)); } catch { /* Keep records in memory when storage is unavailable. */ } }
+writeRecords();
 const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
   <div id="world" aria-label="Three-dimensional long jump practice room"></div>
@@ -77,7 +82,7 @@ app.innerHTML = `
     </aside>
   <div id="hud" hidden>
     <div id="crosshair" class="cs-crosshair"><i></i><i></i><i></i><i></i><b></b></div>
-    <div class="info-panel" aria-live="off"><div>Speed: <b id="speed">0</b> <span id="takeoff-speed"></span></div><div>Keys: <span id="keys">_ _ _ _ _ _</span></div></div>
+    <div class="info-panel" aria-live="off"><div>Speed: <b id="speed">0</b> <span id="takeoff-speed"></span></div><div>Keys: <span id="keys">_ _ _ _ _ _</span></div><div id="hud-pb" class="hud-pb" hidden></div></div>
     <div id="kz-chat" class="kz-chat" aria-live="polite"></div>
     <div class="play-controls"><span><kbd data-bind-label="reset"></kbd> RESET</span><span><kbd data-bind-label="save"></kbd> SAVE</span><span><kbd data-bind-label="return"></kbd> RETURN</span><button id="fullscreen" aria-label="Toggle fullscreen"><i data-lucide="maximize" aria-hidden="true"></i></button></div>
     <div id="toast" role="status"></div>
@@ -91,7 +96,6 @@ app.innerHTML = `
       <ul class="credits-list">
         <li><a href="https://steamcommunity.com/sharedfiles/filedetails/?id=249758765" target="_blank" rel="noreferrer">longjump_source_go</a><p>Original by AZiRES. CS:GO port by badgec / kernel.</p></li>
         <li><a href="https://steamcommunity.com/sharedfiles/filedetails/?id=249444895" target="_blank" rel="noreferrer">kz_longjumps_go</a><p>Draw (CS 1.6), THEBUGUSER (Source), badgec / kernel (CS:GO).</p></li>
-        <li>Concrete<p>Original practice layout made for this app.</p></li>
       </ul>
     </section>
     <section class="about-credits" aria-labelledby="movement-credits-title">
@@ -146,13 +150,12 @@ function applyPreferences() {
   $<HTMLInputElement>('volume').value = String(settings.volume); $('volume-output').textContent = `${Math.round(settings.volume * 100)}%`;
   $('mouse-scale-note').textContent = `Mouse scale: sensitivity × ${settings.mouseYaw}° horizontally / ${settings.mousePitch}° vertically per pixel.`;
   document.querySelectorAll<HTMLElement>('[data-bind-label]').forEach(el => el.textContent = settings.bindings[el.dataset.bindLabel as Action][0] ? tokenLabel(settings.bindings[el.dataset.bindLabel as Action][0]) : '—');
-  updateStatsPanel();
+  updateStatsPanel(); updateSession();
   if (!settings.trail) world.disposeGroup(world.trail);
   writeSettings();
 }
 const settingsPanel = new SettingsPanel($('settings-tab'), settings, applyPreferences);
 applyPreferences();
-const best = () => Math.max(0, ...history.filter(j => j.valid && j.tickRate === settings.tickRate && (j.mapId ?? 'concrete') === settings.mapId).map(j => j.distance));
 function updateStatsPanel() {
   $('jump-panel').hidden = !settings.jumpStats;
   $('stats-toggle-label').textContent = settings.jumpStats ? 'Hide stats' : 'Show stats';
@@ -164,8 +167,13 @@ function toggleStatsPanel() {
 }
 function updateSession() {
   $('history-count').textContent = String(history.length);
-  const pb = best(); $('pb').textContent = pb ? pb.toFixed(2) : '—'; $('pb-tick').textContent = `${settings.tickRate}T`;
-  $('session-list').innerHTML = history.length ? `<div class="session-heading">RECENT JUMPS <span>DIST / SYNC</span></div>${history.slice(0, 5).map(j => `<div class="session-entry"><div><b class="${j.valid ? '' : 'failed'}">${j.distance.toFixed(2)}</b><small>${j.valid ? 'LONG JUMP' : 'MISS'} · ${j.tickRate}T${j.ljBind ? ' · LJ BIND' : ''}</small></div><span>${j.sync.toFixed(0)}% <small>${j.strafes.length} STRAFES</small></span></div>`).join('')}<p class="setting-note">Bests are saved per map and tick rate.</p>` : '<div class="empty-session"><p>No jumps recorded.</p><small>Complete a jump to see your stats.</small></div>';
+  const pb = best(); $('pb').textContent = pb ? pb.toFixed(2) : '—'; $('pb-tick').textContent = `${settings.tickRate}T${settings.autoBhop ? ' · AUTO' : ''}`;
+  const ljBest = best(true);
+  $('hud-pb').hidden = !pb && !ljBest; $('hud-pb').textContent = [pb ? `PB: ${pb.toFixed(2)}` : '', ljBest ? `LJ bind PB: ${ljBest.toFixed(2)}` : '', `${settings.tickRate}T${settings.autoBhop ? ' · AUTO' : ''}`].filter(Boolean).join(' · ');
+  const currentRecords = records.filter(j => j.mapId === settings.mapId && j.tickRate === settings.tickRate);
+  const mode = (j: Entry) => `${j.autoBhop === undefined ? 'LEGACY' : j.autoBhop ? 'AUTO-HOP' : 'MANUAL'}${j.ljBind ? ' · LJ BIND' : ''}`;
+  const bestMarkup = `<div class="session-heading">PERSONAL BESTS <span>${settings.tickRate}T</span></div>${currentRecords.length ? currentRecords.map(j => `<div class="session-entry"><div><b>${j.distance.toFixed(2)}</b><small>${mode(j)} · ${Number.isFinite(j.at) ? new Date(j.at).toLocaleDateString() : 'Earlier session'}</small></div><span>${j.sync.toFixed(0)}% <small>${j.strafes.length} STRAFES</small></span></div>`).join('') : '<p class="setting-note">No best for this map and tick rate yet.</p>'}`;
+  $('session-list').innerHTML = bestMarkup + (history.length ? `<div class="session-heading">RECENT JUMPS <span>DIST / SYNC</span></div>${history.slice(0, 5).map(j => `<div class="session-entry"><div><b class="${j.valid ? '' : 'failed'}">${j.distance.toFixed(2)}</b><small>${j.valid ? 'LONG JUMP' : 'MISS'} · ${j.tickRate}T · ${mode(j)}</small></div><span>${j.sync.toFixed(0)}% <small>${j.strafes.length} STRAFES</small></span></div>`).join('')}<p class="setting-note">Saved in this browser. Bests stay after recent attempts roll off.</p>` : '<div class="empty-session"><p>No jumps recorded.</p><small>Complete a jump to see your stats.</small></div>');
 }
 function clearResult() {
   for (const id of ['distance', 'pre-speed', 'max-speed', 'strafes', 'sync', 'edge', 'height', 'air-ticks', 'overlap', 'dead-air', 'jump-width', 'exact-distance']) $(id).textContent = '—';
@@ -189,14 +197,13 @@ async function changeMap(id: MapId) {
   const previous = settings.mapId;
   try {
     const data = await loadMap(id); await world.buildImported(id, data);
-    classic = data; settings.mapId = id; document.body.dataset.map = id; movement.boxes = data?.boxes ?? concreteBoxes();
+    classic = data; settings.mapId = id; document.body.dataset.map = id; movement.boxes = data.boxes;
     started = false; checkpoint = null;
     const info = maps.find(m => m.id === id)!;
     document.querySelectorAll<HTMLButtonElement>('[data-map]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.map === id)));
     $('map-credit').innerHTML = `${info.credits}${info.workshop ? ` <a href="https://steamcommunity.com/sharedfiles/filedetails/?id=${info.workshop}" target="_blank" rel="noreferrer">WORKSHOP ↗</a>` : ''}`;
     $('menu-map').textContent = info.name;
     $('start').querySelector('span')!.textContent = 'Play';
-    if (!data) world.buildPlatforms(CONCRETE_GAP);
     loadingMap = false; reset(true); clearResult(); writeSettings(); updateSession();
     engagement.configure(playContext()); engagement.mapLoaded();
     $('start-note').textContent = 'Click Play or press Esc to capture the mouse.';
@@ -213,8 +220,10 @@ function chat(result: Result) {
 }
 function showResult(result: Result) {
   engagement.jumpCompleted(result);
-  const previousBest = best();
-  const entry: Entry = { ...result, path: result.path.map(p => ({ ...p })), at: Date.now(), mapId: settings.mapId, tickRate: settings.tickRate, gap: jumpBlock, ljBind: jumpUsedLJ };
+  const previousBest = best(jumpUsedLJ);
+  const entry: Entry = { ...result, path: result.path.map(p => ({ ...p })), at: Date.now(), mapId: settings.mapId, tickRate: settings.tickRate, gap: jumpBlock, ljBind: jumpUsedLJ, autoBhop: settings.autoBhop };
+  const updatedRecords = saveBest(records, entry);
+  if (updatedRecords !== records) { records = updatedRecords; writeRecords(); }
   history.unshift(entry); history = history.slice(0, 100);
   try { localStorage.setItem('vnl-history', JSON.stringify(history)); } catch { /* Keep session in memory. */ }
   $('distance').textContent = result.distance.toFixed(2); $('distance').classList.toggle('miss', !result.valid);
@@ -281,12 +290,12 @@ document.addEventListener('mousemove', event => { if (locked) {
   commands.look(yaw, event.timeStamp);
 } });
 function runAction(action: Action | undefined) {
-  if (action === 'reset') { reset(); sounds.play('checkpoint'); toast(checkpoint ? 'Returned to saved position' : 'Returned to map entrance'); }
+  if (action === 'reset') { reset(); sounds.play('checkpoint'); }
   if (action === 'save') {
     if (movement.grounded && !movement.ducked && movement.support()) { checkpoint = { position: { ...movement.position }, yaw, pitch }; sounds.play('checkpoint'); toast('Position saved'); }
     else { sounds.play('error'); toast('Save a position while standing'); }
   }
-  if (action === 'return') { if (checkpoint) { reset(); sounds.play('checkpoint'); toast('Returned to saved position'); } else { sounds.play('error'); toast('Save a position first'); } }
+  if (action === 'return') { if (checkpoint) { reset(); sounds.play('checkpoint'); } else { sounds.play('error'); toast('Save a position first'); } }
   if (action === 'inspect' || action === 'light' || action === 'heavy') { if (settings.viewmodel) world.viewmodel.play(action); }
   if (action === 'stats') toggleStatsPanel();
 }
@@ -368,7 +377,7 @@ function frame(now: number) {
       if (movement.grounded && !movement.jump) jumpUsedLJ = false;
       if (input.lj) jumpUsedLJ = true;
       movement.step(input);
-      if (belowMap(classic, movement.position)) { fallTime += 1 / movement.tickRate; if (fallTime > 0.32) { reset(); sounds.play('checkpoint'); toast(checkpoint ? 'Returned to saved position' : 'Returned to map entrance'); } } else fallTime = 0;
+      if (belowMap(classic, movement.position)) { fallTime += 1 / movement.tickRate; if (fallTime > 0.32) { reset(); sounds.play('checkpoint'); } } else fallTime = 0;
     });
     world.play(movement.eye(commands.alpha), yaw, pitch, dt, view());
     if (now - uiTime > 40) { updateHUD(); uiTime = now; }
