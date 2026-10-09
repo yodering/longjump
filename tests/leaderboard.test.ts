@@ -66,6 +66,10 @@ test('Only verified replays post, and each player keeps one best per tick rate',
     .sort((x, y) => (y[2] as number) - (x[2] as number)));
   assert.deepEqual(board.map(e => e.rank), [1, 2, 3]);
   assert.ok(!('replay' in board[0]) && !('playerId' in board[0]));
+  // Stats come from the server's own replay, not from anything the browser claims.
+  assert.deepEqual(board.find(e => e.tickRate === 64)!.stats, { preSpeed: slow.result.preSpeed, maxSpeed: slow.result.maxSpeed, sync: slow.result.sync,
+    strafes: slow.result.strafes.length, height: slow.result.height, airtime: slow.result.duration, edge: slow.result.edge, width: slow.result.width,
+    overlap: slow.result.overlap, deadAir: slow.result.deadAir, ducked: slow.result.ducked });
   const only64 = (await f.call('GET', '/api/leaderboard?tick=64')).data.entries as Record<string, any>[];
   assert.deepEqual(only64.map(e => e.tickRate), [64]);
 });
@@ -133,6 +137,19 @@ test('Startup and proxy gate refuse direct production access', () => {
   assert.deepEqual(gate(new Request('http://x/api/leaderboard', { headers: { 'X-Longjump-Client-IP': '1.1.1.1' } }), {}), { address: 'local' });
 });
 
+test('Entries saved before stats existed get them from their replay at startup', async () => {
+  const f = fixture(), a = await f.claim('Older'), jump = recordJump(128);
+  await f.call('POST', '/api/jumps', { replay: jump.replay }, a.key);
+  f.db.query('UPDATE entry SET stats = NULL').run();
+  createLeaderboard({ db: f.db, physicsVersion: 'test', maps: { flat: { boxes: flat, contentVersion: 'test' } } });
+  const [row] = (await f.call('GET', '/api/leaderboard')).data.entries as Record<string, any>[];
+  assert.equal(row.stats.maxSpeed, jump.result.maxSpeed); assert.equal(row.stats.airtime, jump.result.duration);
+  // Replays from other rules keep their verified distance and simply show no stats.
+  f.db.query("UPDATE entry SET stats = NULL, physicsVersion = 'old'").run();
+  createLeaderboard({ db: f.db, physicsVersion: 'test', maps: { flat: { boxes: flat, contentVersion: 'test' } } });
+  assert.equal(((await f.call('GET', '/api/leaderboard')).data.entries as Record<string, any>[])[0].stats, null);
+});
+
 test('Scores persist across restarts and migrations apply once', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'longjump-board-'));
   try {
@@ -141,7 +158,7 @@ test('Scores persist across restarts and migrations apply once', async () => {
     await f.call('POST', '/api/jumps', { replay: recordJump(128).replay }, a.key); f.db.close();
     f = fixture(path);
     assert.equal(((await f.call('GET', '/api/leaderboard')).data.entries as any[])[0].name, 'Durable');
-    assert.deepEqual(f.db.query<{ name: string }, []>('SELECT name FROM schema_migration').all().map(r => r.name), ['0001_leaderboard.sql']);
+    assert.deepEqual(f.db.query<{ name: string }, []>('SELECT name FROM schema_migration').all().map(r => r.name), ['0001_leaderboard.sql', '0002_entry_stats.sql']);
     f.db.close();
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

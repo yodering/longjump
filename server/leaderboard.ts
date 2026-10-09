@@ -1,5 +1,6 @@
 import type { Database } from 'bun:sqlite';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import type { Result } from '../src/physics';
 import { parseReplay, verifyReplay } from '../src/replay';
 import { nameKey, nameProblem } from './names';
 import type { MapRules } from './versions';
@@ -9,6 +10,11 @@ type Player = { id: string; name: string; banned: number };
 class HttpError extends Error { constructor(readonly status: number, message: string) { super(message); } }
 
 const BOARD_SIZE = 100;
+/** What the board shows for a verified jump. Everything comes from the server's replay. */
+export function jumpStats(result: Result) {
+  return { preSpeed: result.preSpeed, maxSpeed: result.maxSpeed, sync: result.sync, strafes: result.strafes.length, height: result.height,
+    airtime: result.duration, edge: result.edge, width: result.width, overlap: result.overlap, deadAir: result.deadAir, ducked: result.ducked };
+}
 const sha = (value: string) => createHash('sha256').update(value).digest('hex');
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: {
   'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
@@ -40,7 +46,14 @@ export function createLeaderboard(config: LeaderboardConfig) {
   const { db } = config, limits = new Limiter();
   const limit = (key: string, max: number, windowMs = 60_000) => { if (!limits.allow(key, max, windowMs)) throw new HttpError(429, 'Too many requests. Try again later.'); };
   const playerByKey = db.query<Player, [string]>('SELECT id, name, banned FROM player WHERE keyHash = ?');
-  const board = (tick: number | null) => db.query<Record<string, unknown>, [number, number, number]>(`SELECT e.id, p.name, e.distance, e.tickRate, e.mapId, e.preSpeed, e.sync, e.strafes, e.ducked, e.at
+  // Rows saved before stats were stored get them from their replay, if it still matches today's rules.
+  for (const row of db.query<{ id: string; replay: string }, [string]>('SELECT id, replay FROM entry WHERE stats IS NULL AND physicsVersion = ?').all(config.physicsVersion)) {
+    try {
+      const replay = parseReplay(JSON.parse(row.replay)), map = config.maps[replay.mapId];
+      if (map) db.query('UPDATE entry SET stats = ? WHERE id = ?').run(JSON.stringify(jumpStats(verifyReplay(replay, map.boxes))), row.id);
+    } catch { /* Leave stats empty; the distance stays as verified. */ }
+  }
+  const board = (tick: number | null) => db.query<Record<string, unknown>, [number, number, number]>(`SELECT e.id, p.name, e.distance, e.tickRate, e.mapId, e.stats, e.at
     FROM entry e JOIN player p ON p.id = e.playerId WHERE p.banned = 0 AND (? = 0 OR e.tickRate = ?) ORDER BY e.distance DESC, e.at ASC LIMIT ?`).all(tick ?? 0, tick ?? 0, BOARD_SIZE);
 
   function player(request: Request) {
@@ -66,7 +79,7 @@ export function createLeaderboard(config: LeaderboardConfig) {
     if (path === '/api/leaderboard' && method === 'GET') {
       limit(`read:${address}`, 120);
       const tick = url.searchParams.get('tick'), filter = tick === '64' ? 64 : tick === '128' ? 128 : null;
-      return json({ entries: board(filter).map((row, index) => ({ rank: index + 1, ...row, ducked: !!row.ducked })) });
+      return json({ entries: board(filter).map((row, index) => ({ rank: index + 1, ...row, stats: row.stats ? JSON.parse(row.stats as string) : null })) });
     }
     if (path === '/api/players' && method === 'POST') {
       limit(`claim:${address}`, 5, 3_600_000);
@@ -106,12 +119,12 @@ export function createLeaderboard(config: LeaderboardConfig) {
       try { result = verifyReplay(replay, map.boxes); } catch (error) { throw new HttpError(422, (error as Error).message); }
       if (!result.valid) throw new HttpError(422, `This jump doesn’t count: ${result.reason.toLowerCase()}.`);
       const id = crypto.randomUUID(), now = Date.now();
-      const saved = db.query(`INSERT INTO entry (id, playerId, tickRate, distance, mapId, preSpeed, sync, strafes, ducked, physicsVersion, replay, at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      const saved = db.query(`INSERT INTO entry (id, playerId, tickRate, distance, mapId, preSpeed, sync, strafes, ducked, physicsVersion, replay, stats, at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(playerId, tickRate) DO UPDATE SET id = excluded.id, distance = excluded.distance, mapId = excluded.mapId, preSpeed = excluded.preSpeed,
-          sync = excluded.sync, strafes = excluded.strafes, ducked = excluded.ducked, physicsVersion = excluded.physicsVersion, replay = excluded.replay, at = excluded.at
+          sync = excluded.sync, strafes = excluded.strafes, ducked = excluded.ducked, physicsVersion = excluded.physicsVersion, replay = excluded.replay, stats = excluded.stats, at = excluded.at
         WHERE excluded.distance > entry.distance`).run(id, me.id, replay.tickRate, result.distance, replay.mapId, result.preSpeed, result.sync,
-        result.strafes.length, result.ducked ? 1 : 0, replay.physicsVersion, JSON.stringify(replay), now);
+        result.strafes.length, result.ducked ? 1 : 0, replay.physicsVersion, JSON.stringify(replay), JSON.stringify(jumpStats(result)), now);
       const rank = db.query<{ n: number }, [number]>('SELECT COUNT(*) AS n FROM entry e JOIN player p ON p.id = e.playerId WHERE p.banned = 0 AND e.distance > ?').get(result.distance)!.n + 1;
       return json({ distance: result.distance, tickRate: replay.tickRate, improved: saved.changes > 0, rank });
     }

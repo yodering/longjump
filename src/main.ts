@@ -21,6 +21,9 @@ import { Engagement } from './engagement';
 import { loadAnalytics } from './analytics';
 import { PlayGuard } from './play-guard';
 
+// Play needs pointer lock, a keyboard and room for the HUD; tell small or touch screens up front.
+const DEVICE_NOTE = 'Hey! longjump works best on a large display with a keyboard and mouse.';
+const READY_NOTE = matchMedia('(max-width: 699px), (pointer: coarse)').matches ? DEVICE_NOTE : 'Click Play or press Esc to capture the mouse.';
 function read<T>(key: string, fallback: T): T { try { return JSON.parse(localStorage.getItem(key) || 'null') ?? fallback; } catch { return fallback; } }
 const settings = normalizeSettings(read<unknown>('vnl-settings', {}));
 const playContext = () => ({ map: settings.mapId, tick_rate: settings.tickRate, auto_bhop: settings.autoBhop });
@@ -48,6 +51,7 @@ app.innerHTML = `
       <h1>longjump</h1>
       <p class="description">cs:go long jump practice</p>
       <div class="current-map"><span>Map</span><strong id="menu-map">Loading…</strong></div>
+      <section id="leaderboard-prompt" class="leaderboard-prompt" aria-label="Post to the leaderboard" hidden></section>
       <nav class="tabs" aria-label="Practice menu"><button data-tab="practice" class="active">Practice</button><button data-tab="maps">Maps</button><button data-tab="settings">Settings</button><button data-tab="session">History <span id="history-count">0</span></button><button data-tab="leaderboard">Leaderboard</button></nav>
       <section id="practice-tab" class="tab-content">
         <div class="checkpoint-help"><span><kbd data-bind-label="save"></kbd> Save position</span><span><kbd data-bind-label="return"></kbd> Return</span><span><kbd data-bind-label="reset"></kbd> Reset</span></div>
@@ -72,7 +76,7 @@ app.innerHTML = `
       <section id="session-tab" class="tab-content" hidden><div id="personal-bests"></div><div id="history-browser"></div></section>
       <section id="leaderboard-tab" class="tab-content" hidden></section>
       <button id="start" class="start-button"><i data-lucide="play" aria-hidden="true"></i><span>Play</span></button>
-      <div id="start-note" class="start-note">Click Play or press Esc to capture the mouse.</div>
+      <div id="start-note" class="start-note">${READY_NOTE}</div>
     </div>
     <footer class="menu-footer"><span>Made by <a href="https://twitter.com/yodering" target="_blank" rel="noreferrer">@yodering</a></span><button id="about-button" aria-label="About movement and maps">About</button></footer>
   </main>
@@ -167,7 +171,7 @@ function applyPreferences() {
   writeSettings();
 }
 const settingsPanel = new SettingsPanel($('settings-tab'), settings, applyPreferences);
-const leaderboard = new LeaderboardPanel($('leaderboard-tab'), message => toast(message));
+const leaderboard = new LeaderboardPanel($('leaderboard-tab'), $('leaderboard-prompt'), message => toast(message));
 applyPreferences();
 function updateStatsPanel() {
   $('jump-panel').hidden = !settings.jumpStats;
@@ -223,7 +227,7 @@ async function changeMap(id: MapId) {
     $('start').querySelector('span')!.textContent = 'Play';
     loadingMap = false; reset(true); clearResult(); writeSettings(); updateSession();
     engagement.configure(playContext()); engagement.mapLoaded();
-    $('start-note').textContent = 'Click Play or press Esc to capture the mouse.';
+    $('start-note').textContent = READY_NOTE;
   } catch (error) { console.error(error); settings.mapId = previous; $('start-note').textContent = 'Map could not load. Choose a map to retry.'; }
   finally { loadingMap = false; $<HTMLButtonElement>('start').disabled = false; document.querySelectorAll<HTMLButtonElement>('[data-map]').forEach(b => b.disabled = false); }
 }
@@ -294,10 +298,10 @@ function setLocked(value: boolean) {
 }
 async function enter() {
   if (loadingMap) return;
-  if (innerWidth < 700) { $('start-note').textContent = 'This room needs a desktop keyboard and mouse.'; return; }
+  if (innerWidth < 700) { $('start-note').textContent = DEVICE_NOTE; return; }
   try {
     await lockMouse(world.renderer.domElement);
-    $('start-note').textContent = 'Click Play or press Esc to capture the mouse.';
+    $('start-note').textContent = READY_NOTE;
     started = true;
     try { await sounds.unlock(); } catch (error) { console.error(error); toast('Some sounds could not load'); }
   } catch (error) { console.warn('Pointer lock request rejected:', error); $('start-note').textContent = 'Click Play in a focused browser window to capture the mouse.'; }

@@ -9,7 +9,7 @@ browser ──> longjump.ing (Cloudflare) ──static──> dist/
 
 ## How a jump gets on the board
 
-1. The Leaderboard tab claims a name. The server returns a random 256-bit key, which the browser keeps in localStorage; only its SHA-256 hash is stored.
+1. After a qualifying manual jump, the paused menu offers to post it under a name (or the Ranks tab sets one). The server returns a random 256-bit key, which the browser keeps in localStorage; only its SHA-256 hash is stored.
 2. The game records the movement state before each takeoff tick and every command through the result ([`src/replay.ts`](../src/replay.ts)).
 3. After a valid jump with auto-hop off that beats the name's posted best, the browser posts the replay.
 4. The server checks the physics version and map-content version, replays the jump with the same `physics.ts` and the map's collision boxes, and stores the distance it computed. The result must be valid, start grounded at rest height, begin on the takeoff tick and end on the final command.
@@ -34,7 +34,7 @@ Vite proxies `/api/*` to port 8787 (or `LONGJUMP_API`). `ALLOW_DIRECT=1` lets th
 
 | Route | Request / response |
 | --- | --- |
-| `GET /api/leaderboard?tick=64\|128` | Top 100: rank, name, distance, tick rate, map, takeoff stats, date |
+| `GET /api/leaderboard?tick=64\|128` | Top 100: rank, name, distance, tick rate, map, date and jump stats recomputed from the replay |
 | `POST /api/players` | `name`; returns player and key. 5 claims per address per hour |
 | `GET /api/players/me` | Bearer key; name, banned flag and posted bests |
 | `POST /api/players/me` | Bearer key, `name`; renames |
