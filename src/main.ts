@@ -1,5 +1,5 @@
 import './style.css';
-import { createIcons, Play, Maximize, ArrowLeftRight, X } from 'lucide';
+import { createIcons, Play, Maximize, Minimize, ArrowLeftRight, X } from 'lucide';
 import { Movement, speed, type Result, type Vec } from './physics';
 import { World } from './world';
 import { maps, loadMap, type MapId, type ImportedMap } from './maps';
@@ -28,7 +28,7 @@ import { PlayGuard } from './play-guard';
 
 // Play needs pointer lock, a keyboard and room for the HUD; tell small or touch screens up front.
 const DEVICE_NOTE = 'Hey! longjump works best on a large display with a keyboard and mouse.';
-const READY_NOTE = matchMedia('(max-width: 699px), (pointer: coarse)').matches ? DEVICE_NOTE : 'Click Play or press Esc to capture the mouse.';
+const READY_NOTE = matchMedia('(max-width: 699px), (pointer: coarse)').matches ? DEVICE_NOTE : 'Play captures your mouse. Esc releases it.';
 function read<T>(key: string, fallback: T): T { try { return JSON.parse(localStorage.getItem(key) || 'null') ?? fallback; } catch { return fallback; } }
 const settings = normalizeSettings(read<unknown>('vnl-settings', {}));
 const playContext = () => ({ map: settings.mapId, tick_rate: settings.tickRate, auto_bhop: settings.autoBhop });
@@ -49,14 +49,14 @@ app.innerHTML = `
   <div id="world" aria-label="Three-dimensional long jump practice room"></div>
   <header class="topbar">
     <button id="stats-toggle" class="quiet-button" aria-controls="jump-panel" aria-expanded="false"><span id="stats-toggle-label">Show stats</span> <kbd data-bind-label="stats"></kbd></button>
-    <button id="menu-button" class="quiet-button" hidden>Menu <kbd>Esc</kbd></button>
+    <div id="menu-hint" class="quiet-button menu-hint" hidden>Menu <kbd id="menu-key">P</kbd><button id="menu-hint-close" class="menu-hint-close" aria-label="Hide menu hint" title="Hide menu hint"><i data-lucide="x" aria-hidden="true"></i></button></div>
   </header>
   <main id="menu" class="menu">
-    <div class="menu-content">
-      <h1>longjump</h1>
-      <p class="description">cs:go long jump practice</p>
-      <div class="current-map"><span>Map</span><strong id="menu-map">Loading…</strong></div>
+    <header class="menu-header">
+      <div class="menu-title"><h1>longjump</h1><span class="menu-meta"><b id="menu-map">Loading…</b> · <span id="menu-tick">${settings.tickRate} tick</span></span></div>
       <nav class="tabs" aria-label="Practice menu"><button data-tab="practice" class="active">Practice</button><button data-tab="maps">Maps</button><button data-tab="settings">Settings</button><button data-tab="session">History <span id="history-count">0</span></button><button data-tab="leaderboard">Leaderboard</button></nav>
+    </header>
+    <div class="menu-content">
       <section id="practice-tab" class="tab-content">
         <div class="checkpoint-help"><span><kbd data-bind-label="save"></kbd> Save position</span><span><kbd data-bind-label="return"></kbd> Return</span><span><kbd data-bind-label="reset"></kbd> Reset</span></div>
         <div class="profile-row"><span>Vanilla</span><button id="tick-toggle">${settings.tickRate} tick <i data-lucide="arrow-left-right" aria-hidden="true"></i></button></div>
@@ -69,7 +69,9 @@ app.innerHTML = `
       <section id="settings-tab" class="tab-content" hidden></section>
       <section id="session-tab" class="tab-content" hidden><div id="personal-bests"></div><div id="history-browser"></div></section>
       <section id="leaderboard-tab" class="tab-content" hidden></section>
-      <button id="start" class="start-button"><i data-lucide="play" aria-hidden="true"></i><span>Play</span></button>
+    </div>
+    <div class="menu-actions">
+      <div class="start-row"><button id="start" class="start-button"><i data-lucide="play" aria-hidden="true"></i><span>Play</span></button><button id="start-fullscreen" class="settings-button start-fullscreen"></button></div>
       <div id="start-note" class="start-note">${READY_NOTE}</div>
     </div>
     <footer class="menu-footer"><span>Made by <a href="https://twitter.com/yodering" target="_blank" rel="noreferrer">@yodering</a></span><button id="about-button" aria-label="About movement and maps">About</button></footer>
@@ -95,9 +97,9 @@ app.innerHTML = `
     <div id="spectate-banner" class="spectate-banner" hidden></div>
     <div id="info-panel" class="info-panel" aria-live="off"><div id="info-speed">Speed: <b id="speed">0</b> <span id="takeoff-speed"></span></div><div id="info-keys">Keys: <span id="keys">_ _ _ _ _ _</span></div><div id="info-pb" class="hud-pb" hidden></div></div>
     <div id="kz-chat" class="kz-chat" aria-live="polite"></div>
-    <div class="play-controls"><span data-hint><kbd data-bind-label="reset"></kbd> RESET</span><span data-hint><kbd data-bind-label="save"></kbd> SAVE</span><span data-hint><kbd data-bind-label="return"></kbd> RETURN</span><button id="fullscreen" aria-label="Toggle fullscreen"><i data-lucide="maximize" aria-hidden="true"></i></button></div>
-    <div id="toast" role="status"></div>
+    <div class="play-controls"><span data-hint><kbd data-bind-label="reset"></kbd> RESET</span><span data-hint><kbd data-bind-label="save"></kbd> SAVE</span><span data-hint><kbd data-bind-label="return"></kbd> RETURN</span></div>
   </div>
+  <div id="toast" role="status"></div>
   <dialog id="about" aria-labelledby="about-title">
     <button id="close-about" class="quiet-button">Close <i data-lucide="x" aria-hidden="true"></i></button>
     <h2 id="about-title">About longjump</h2>
@@ -164,6 +166,7 @@ function applyPreferences() {
   if (world.viewmodel.team !== settings.team) void world.viewmodel.setTeam(settings.team);
   sounds.enabled = settings.sound; sounds.volume = settings.volume;
   document.querySelectorAll<HTMLElement>('[data-bind-label]').forEach(el => el.textContent = settings.bindings[el.dataset.bindLabel as Action][0] ? tokenLabel(settings.bindings[el.dataset.bindLabel as Action][0]) : '—');
+  $('menu-key').textContent = settings.bindings.menu[0] ? tokenLabel(settings.bindings.menu[0]) : 'Esc';
   updateStatsPanel(); updateSession();
   if (!settings.trail) world.disposeGroup(world.trail);
   else if (!world.trail.children.length && movement.result) world.showTrail(movement.result.path);
@@ -228,6 +231,7 @@ function layoutHud() {
   $('info-speed').hidden = !bottom; $('info-keys').hidden = !hud.keys;
   $('info-panel').hidden = !bottom && !hud.keys && $('info-pb').hidden;
   document.querySelectorAll<HTMLElement>('[data-hint]').forEach(hint => hint.hidden = !hud.hints);
+  $('menu-hint').hidden = !hud.menuHint;
 }
 // The HUD and Crosshair settings pages show the real HUD over the live view behind the menu.
 const hudPreview = () => settingsPreview && !locked && (settingsPanel.page === 'hud' || settingsPanel.page === 'crosshair');
@@ -271,7 +275,7 @@ async function changeMap(id: MapId) {
   } catch (error) { console.error(error); settings.mapId = previous; $('start-note').textContent = 'Map could not load. Choose a map to retry.'; }
   finally { loadingMap = false; $<HTMLButtonElement>('start').disabled = false; document.querySelectorAll<HTMLButtonElement>('[data-map]').forEach(b => b.disabled = false); }
 }
-function toast(message: string) { $('toast').textContent = message; $('toast').classList.add('visible'); clearTimeout(toastTimeout); toastTimeout = window.setTimeout(() => $('toast').classList.remove('visible'), 2200); }
+function toast(message: string, duration = 2200) { $('toast').textContent = message; $('toast').classList.add('visible'); clearTimeout(toastTimeout); toastTimeout = window.setTimeout(() => $('toast').classList.remove('visible'), duration); }
 function feedLine(markup: string) {
   const line = document.createElement('div');
   line.innerHTML = markup;
@@ -339,25 +343,52 @@ function setLocked(value: boolean) {
   else void playGuard.capture(false);
   engagement.setPlaying(value && !document.hidden);
   locked = value; controls.clear(); settingsPanel.cancelCapture(); lastTime = performance.now(); commands.reset(lastTime, yaw); movement.jumpHeld = false;
-  $('menu').hidden = value; $('hud').hidden = !value; $('menu-button').hidden = !value; previewHud();
+  $('menu').hidden = value; $('hud').hidden = !value; layoutHud(); previewHud();
   if (value) $<HTMLDetailsElement>('jump-details').open = false;
   document.body.classList.toggle('playing', value);
   $('start').querySelector('span')!.textContent = started ? 'Resume' : 'Play';
 }
-async function enter() {
+// The browser owns Escape: it always releases the mouse and is never a user
+// gesture, so it cannot capture the mouse again. The Menu bind is an ordinary
+// key or button press, so it toggles in both directions.
+let captured = false;
+function release() { playGuard.setPlaying(false, false); document.exitPointerLock(); }
+const lockFailed = () => {
+  const button = started ? 'Resume' : 'Play';
+  $('start-note').textContent = document.hasFocus() ? `Your browser needs a moment after Esc. Click ${button} again.` : `Click ${button} in a focused browser window to capture the mouse.`;
+};
+/** The Menu bind reopens play from the menu, unless the player is typing or binding. */
+function menuBind(token: string) {
+  if (locked || !settings.bindings.menu.includes(token) || $<HTMLDialogElement>('about').open) return false;
+  if (document.activeElement?.matches('input:not([type=checkbox]):not([type=radio]):not([type=range]), textarea, select')) return false;
+  (document.activeElement as HTMLElement | null)?.blur();
+  void enter(); return true;
+}
+async function enter(full = false) {
   if (loadingMap) return;
   if (innerWidth < 700) { $('start-note').textContent = DEVICE_NOTE; return; }
   try {
+    // Fullscreen consumes the click's activation, so it waits for pointer lock.
     await lockMouse(world.renderer.domElement);
+    if (full && !document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => toast('Fullscreen is unavailable in this browser'));
     $('start-note').textContent = READY_NOTE;
     started = true;
     try { await sounds.unlock(); } catch (error) { console.error(error); toast('Some sounds could not load'); }
-  } catch (error) { console.warn('Pointer lock request rejected:', error); $('start-note').textContent = 'Click Play in a focused browser window to capture the mouse.'; }
+  } catch (error) { console.warn('Pointer lock request rejected:', error); lockFailed(); }
 }
-$('start').addEventListener('click', enter);
+$('start').addEventListener('click', () => void enter());
+$('start-fullscreen').addEventListener('click', () => { if (document.fullscreenElement) void document.exitFullscreen(); else void enter(true); });
 world.renderer.domElement.addEventListener('click', () => { if (started && !locked && $('about').hasAttribute('open') === false) void enter(); });
-document.addEventListener('pointerlockchange', () => setLocked(document.pointerLockElement === world.renderer.domElement));
-document.addEventListener('pointerlockerror', () => { $('start-note').textContent = 'Focus a desktop browser window, then click Play again.'; });
+document.addEventListener('pointerlockchange', () => {
+  const value = document.pointerLockElement === world.renderer.domElement;
+  setLocked(value);
+  if (value && !captured) {
+    captured = true;
+    // Shown on the first capture of every visit, whatever the hint settings are.
+    toast(`Mouse captured · Esc to release${settings.bindings.menu.length ? `\n${bindLabel('menu')} to toggle menu` : ''}`, 4000);
+  }
+});
+document.addEventListener('pointerlockerror', lockFailed);
 document.addEventListener('mousemove', event => { if (locked && !spectating) {
   yaw += event.movementX * settings.sensitivity * settings.mouseYaw * Math.PI / 180;
   pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, pitch - event.movementY * settings.sensitivity * settings.mousePitch * (settings.invertY ? -1 : 1) * Math.PI / 180));
@@ -379,6 +410,7 @@ function cycleSpectate(step: 1 | -1) {
   spectate(targets[index < 0 ? (step > 0 ? 0 : targets.length - 1) : (index + step + targets.length) % targets.length]);
 }
 function runAction(action: Action | undefined) {
+  if (action === 'menu') { release(); return; }
   if (spectating) {
     if (action === 'spectate') spectate(null);
     if (action === 'light') cycleSpectate(1);
@@ -405,21 +437,13 @@ function runAction(action: Action | undefined) {
 document.addEventListener('keydown', event => {
   if (settingsPanel.captureToken(event.code)) { event.preventDefault(); return; }
   if (event.code === 'Escape') {
-    // A modal keeps its native Escape-to-dismiss behavior. Binding capture
-    // above also gets the first Escape, so cancelling never resumes play.
+    // Escape only ever releases the mouse; dialogs and binding capture keep it first.
     if ($<HTMLDialogElement>('about').open || event.defaultPrevented) return;
     event.preventDefault();
-    if (event.repeat) return;
-    if (locked) {
-      playGuard.setPlaying(false, false);
-      document.exitPointerLock();
-    } else {
-      // Commit any focused settings input before hiding the menu.
-      (document.activeElement as HTMLElement | null)?.blur();
-      void enter();
-    }
+    if (locked && !event.repeat) release();
     return;
   }
+  if (!event.repeat && menuBind(event.code)) { event.preventDefault(); return; }
   if (!locked) return;
   if (controls.action(event.code) || ['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(event.code)) event.preventDefault();
   if (!event.repeat) runAction(commands.button('down', event.code, event.timeStamp));
@@ -427,10 +451,16 @@ document.addEventListener('keydown', event => {
 document.addEventListener('keyup', event => { if (locked) commands.button('up', event.code, event.timeStamp); });
 document.addEventListener('mousedown', event => {
   const token = `Mouse${event.button}`;
+  if (event.button === 3 || event.button === 4) event.preventDefault();
   if (settingsPanel.captureToken(token)) { event.preventDefault(); return; }
+  if (event.button !== 0 && menuBind(token)) { event.preventDefault(); return; }
   if (locked) { event.preventDefault(); runAction(commands.button('down', token, event.timeStamp)); }
 });
-document.addEventListener('mouseup', event => { if (locked) commands.button('up', `Mouse${event.button}`, event.timeStamp); });
+document.addEventListener('mouseup', event => {
+  // Mouse 4/5 navigate back/forward on release unless cancelled, which would leave the game.
+  if (event.button === 3 || event.button === 4) event.preventDefault();
+  if (locked) commands.button('up', `Mouse${event.button}`, event.timeStamp);
+});
 document.addEventListener('wheel', event => {
   if (!event.deltaY) return;
   const token = event.deltaY < 0 ? 'WheelUp' : 'WheelDown';
@@ -439,18 +469,24 @@ document.addEventListener('wheel', event => {
 }, { passive: false });
 addEventListener('blur', () => { controls.clear(); commands.reset(performance.now(), yaw); settingsPanel.cancelCapture(); if (locked) document.exitPointerLock(); });
 addEventListener('focus', () => { if (!locked) playGuard.setPlaying(false, false); });
-document.addEventListener('fullscreenchange', () => { void playGuard.capture(locked && !!document.fullscreenElement); });
+const fullscreenOffer = () => {
+  const button = $('start-fullscreen'), full = !!document.fullscreenElement;
+  button.hidden = !document.fullscreenEnabled;
+  button.innerHTML = `<i data-lucide="${full ? 'minimize' : 'maximize'}" aria-hidden="true"></i>${full ? 'Exit fullscreen' : 'Fullscreen'}`;
+  createIcons({ icons: { Maximize, Minimize }, attrs: { 'aria-hidden': 'true' } });
+};
+fullscreenOffer();
+document.addEventListener('fullscreenchange', () => { fullscreenOffer(); void playGuard.capture(locked && !!document.fullscreenElement); });
 document.addEventListener('visibilitychange', () => { engagement.setPlaying(locked && !document.hidden); if (document.hidden) { controls.clear(); if (locked) document.exitPointerLock(); } lastTime = performance.now(); commands.reset(lastTime, yaw); });
 $('stats-toggle').addEventListener('click', toggleStatsPanel);
-$('menu-button').addEventListener('click', () => { playGuard.setPlaying(false, false); if (locked) document.exitPointerLock(); });
+$('menu-hint-close').addEventListener('click', () => { settings.hud.menuHint = false; applyPreferences(); settingsPanel.render(); });
 document.querySelectorAll<HTMLButtonElement>('[data-map]').forEach(button => button.addEventListener('click', () => void changeMap(button.dataset.map as MapId)));
-$('tick-toggle').addEventListener('click', () => { settings.tickRate = settings.tickRate === 128 ? 64 : 128; engagement.configure(playContext()); movement.tickRate = settings.tickRate; reset(); $('tick-toggle').innerHTML = `${settings.tickRate} tick <i data-lucide="arrow-left-right" aria-hidden="true"></i>`; createIcons({ icons: { ArrowLeftRight }, attrs: { 'aria-hidden': 'true' } }); writeSettings(); updateSession(); });
+$('tick-toggle').addEventListener('click', () => { settings.tickRate = settings.tickRate === 128 ? 64 : 128; engagement.configure(playContext()); movement.tickRate = settings.tickRate; reset(); $('menu-tick').textContent = `${settings.tickRate} tick`; $('tick-toggle').innerHTML = `${settings.tickRate} tick <i data-lucide="arrow-left-right" aria-hidden="true"></i>`; createIcons({ icons: { ArrowLeftRight }, attrs: { 'aria-hidden': 'true' } }); writeSettings(); updateSession(); });
 document.querySelectorAll<HTMLButtonElement>('[data-sample]').forEach(button => button.addEventListener('click', async () => { try { await sounds.unlock(); sounds.play(button.dataset.sample as Sound, true); } catch (error) { console.error(error); $('start-note').textContent = 'Sound files could not load.'; } }));
 document.addEventListener('contextmenu', event => { if (locked || !$('settings-tab').hidden) event.preventDefault(); });
 document.addEventListener('auxclick', event => { if (locked) event.preventDefault(); });
 void world.viewmodel.setTeam(settings.team);
 document.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach(button => button.addEventListener('click', () => { settingsPanel.cancelCapture(); settingsPreview = button.dataset.tab === 'settings'; document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('active', b === button)); for (const name of ['practice', 'maps', 'settings', 'session', 'leaderboard']) $(`${name}-tab`).hidden = name !== button.dataset.tab; previewHud(); if (button.dataset.tab === 'session') void historyPanel?.refresh(); if (button.dataset.tab === 'leaderboard') void leaderboard.refresh(); }));
-$('fullscreen').addEventListener('click', async () => { try { if (document.fullscreenElement) await document.exitFullscreen(); else await document.documentElement.requestFullscreen(); } catch { toast('Fullscreen is unavailable in this browser'); } });
 $('about-button').addEventListener('click', () => $<HTMLDialogElement>('about').showModal());
 $('close-about').addEventListener('click', () => $<HTMLDialogElement>('about').close());
 historyPanel = new HistoryPanel($('history-browser'), archive, count => { $('history-count').textContent = String(count); }, () => records, {
