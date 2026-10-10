@@ -4,7 +4,7 @@ export const actions = {
   forward: 'Forward', back: 'Back', left: 'Strafe left', right: 'Strafe right', jump: 'Jump',
   duck: 'Duck', walk: 'Walk', longJump: 'Long jump bind', reset: 'Reset', save: 'Save position',
   return: 'Return to saved position', inspect: 'Inspect knife', light: 'Light swing', heavy: 'Heavy swing', stats: 'Toggle jump stats',
-  spectate: 'Spectate',
+  spectate: 'Spectate', menu: 'Menu',
 } as const;
 export type Action = keyof typeof actions;
 export type Bindings = Record<Action, string[]>;
@@ -12,7 +12,7 @@ export const defaultBindings: Bindings = {
   forward: ['KeyW'], back: ['KeyS'], left: ['KeyA'], right: ['KeyD'], jump: ['Space', 'WheelUp', 'WheelDown'],
   duck: ['ControlLeft', 'ControlRight'], walk: ['ShiftLeft', 'ShiftRight'], longJump: [], reset: ['KeyR'],
   save: ['KeyX'], return: ['KeyC'], inspect: ['KeyF'], light: ['Mouse0'], heavy: ['Mouse2'], stats: ['KeyH'],
-  spectate: ['KeyM'],
+  spectate: ['KeyM'], menu: ['KeyP'],
 };
 export const validToken = (token: unknown): token is string => typeof token === 'string'
   && /^(Key[A-Z]|Digit[0-9]|F([1-9]|1[0-2])|Numpad[0-9]|Numpad(Add|Subtract|Multiply|Divide|Decimal|Enter)|Arrow(Up|Down|Left|Right)|Space|Tab|Enter|Backspace|Delete|Insert|Home|End|PageUp|PageDown|CapsLock|Shift(Left|Right)|Control(Left|Right)|Alt(Left|Right)|Bracket(Left|Right)|Semicolon|Quote|Comma|Period|Slash|Backslash|Minus|Equal|Backquote|Mouse[0-4]|Wheel(Up|Down))$/.test(token);

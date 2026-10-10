@@ -11,7 +11,7 @@ export const speedPlacements = { crosshair: 'Crosshair', bottom: 'Bottom', both:
 export const speedSizes = { s: 'Small', m: 'Medium', l: 'Large' } as const;
 // speed: where the speed readout appears; offset: px between the crosshair and the readout under it.
 export type HudSettings = { speed: keyof typeof speedPlacements; takeoff: boolean; decimals: 0 | 1 | 2; size: keyof typeof speedSizes;
-  color: string; offset: number; keys: boolean; pb: boolean; hints: boolean };
+  color: string; offset: number; keys: boolean; pb: boolean; hints: boolean; menuHint: boolean };
 export type Settings = { mapId: MapId; volume: number; tickRate: 64 | 128; sensitivity: number; mouseYaw: number; mousePitch: number;
   invertY: boolean; autoBhop: boolean; nullBind: boolean; jumpStats: boolean; showPlayers: boolean; sound: boolean; trail: boolean; viewmodel: boolean; leftHand: boolean; team: 'ct' | 't';
   appearance: 'dark' | 'light'; resolution: Resolution; scaling: 'stretch' | 'fit'; view: ViewSettings; crosshair: CrosshairSettings; hud: HudSettings; bindings: Bindings };
@@ -26,7 +26,7 @@ export const defaults: Settings = { mapId: 'kz_baxter', volume: 0.6, tickRate: 6
   mouseYaw: 0.022, mousePitch: 0.022, invertY: false, autoBhop: false, nullBind: false, jumpStats: false, showPlayers: true, sound: true, trail: true,
   viewmodel: true, leftHand: false, team: 'ct', appearance: 'dark', resolution: 'native', scaling: 'stretch', view: { ...viewPresets.desktop },
   crosshair: { size: 4, gap: 2, thickness: 1, color: '#eeeeee', alpha: 1, dot: false, outline: true },
-  hud: { speed: 'crosshair', takeoff: true, decimals: 2, size: 'm', color: '#ffffff', offset: 72, keys: true, pb: true, hints: true },
+  hud: { speed: 'crosshair', takeoff: true, decimals: 2, size: 'm', color: '#ffffff', offset: 72, keys: true, pb: true, hints: true, menuHint: true },
   bindings: normalizeBindings(null) };
 export function bounded(value: unknown, fallback: number, min: number, max: number) {
   const n = typeof value === 'number' || typeof value === 'string' && value.trim() ? Number(value) : NaN;
@@ -65,7 +65,7 @@ export function normalizeSettings(value: unknown): Settings {
   if (h?.decimals === 0 || h?.decimals === 1 || h?.decimals === 2) settings.hud.decimals = h.decimals;
   if (typeof h?.color === 'string' && /^#[0-9a-f]{6}$/i.test(h.color)) settings.hud.color = h.color;
   settings.hud.offset = bounded(h?.offset, defaults.hud.offset, 24, 320);
-  for (const name of ['takeoff', 'keys', 'pb', 'hints'] as const) if (typeof h?.[name] === 'boolean') settings.hud[name] = h[name];
+  for (const name of ['takeoff', 'keys', 'pb', 'hints', 'menuHint'] as const) if (typeof h?.[name] === 'boolean') settings.hud[name] = h[name];
   settings.bindings = normalizeBindings(raw.bindings);
   return settings;
 }

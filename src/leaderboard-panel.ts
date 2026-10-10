@@ -94,7 +94,7 @@ export class LeaderboardPanel {
       <div><span>OVERLAP</span><b>${s.overlap}</b></div><div><span>DEAD AIR</span><b>${s.deadAir}</b></div></div>` : '';
     return `<li><details class="history-attempt leaderboard-row${own}"><summary><span class="leaderboard-rank">${row.rank}</span>
       <span class="leaderboard-name">${escape(row.name)}<small>${escape(mapName(row.mapId))}</small></span>
-      <span class="leaderboard-score"><b>${row.distance.toFixed(2)}</b><small>${row.tickRate}T</small></span></summary>
+      <span class="leaderboard-score"><b>${row.distance.toFixed(2)}</b><small class="tick tick-${row.tickRate}">${row.tickRate}T</small></span></summary>
       <div class="history-detail"><p>${new Date(row.at).toLocaleString()}${s?.ducked ? ' · Ducked' : ''}</p>${metrics}</div></details></li>`;
   }
   private post({ result, replay }: Pending) {

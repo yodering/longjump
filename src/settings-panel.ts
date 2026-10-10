@@ -13,7 +13,7 @@ const crosshairRanges = { size: ['Length', 0, 20, 0.5], gap: ['Gap', -5, 20, 0.5
 const crosshairMarkup = '<i></i><i></i><i></i><i></i><b></b>';
 const toggles = { 'invert-y': 'invertY', 'auto-bhop': 'autoBhop', 'null-bind': 'nullBind', jumpStats: 'jumpStats', trail: 'trail',
   sound: 'sound', viewmodel: 'viewmodel', leftHand: 'leftHand' } as const;
-const hudToggles = { 'hud-takeoff': 'takeoff', 'hud-keys': 'keys', 'hud-pb': 'pb', 'hud-hints': 'hints' } as const;
+const hudToggles = { 'hud-takeoff': 'takeoff', 'hud-keys': 'keys', 'hud-pb': 'pb', 'hud-hints': 'hints', 'hud-menu-hint': 'menuHint' } as const;
 
 // Markup helpers: one row per setting, grouped into cards. Notes sit under their label.
 const text = (label: string, note?: string, id?: string) => `<span class="setting-text"><span${id ? ` id="${id}-label"` : ''}>${label}</span>${note ? `<small${id ? ` id="${id}-note"` : ''}>${note}</small>` : ''}</span>`;
@@ -34,8 +34,7 @@ export class SettingsPanel {
         ${group('Display', `
           ${choice('appearance', 'Theme', { dark: 'Dark', light: 'Light' })}
           ${control('resolution', 'Render resolution', `<select id="resolution">${Object.entries(resolutions).map(([id, name]) => `<option value="${id}">${name}</option>`).join('')}</select>`, '90° FOV at 4:3, matching CS:GO.')}
-          ${choice('scaling', 'Scaling', { stretch: 'Stretched', fit: 'Black bars' })}
-          <div class="setting-row">${text('Fullscreen')}<button id="settings-fullscreen" class="settings-button">Toggle</button></div>`)}
+          ${choice('scaling', 'Scaling', { stretch: 'Stretched', fit: 'Black bars' })}`)}
         ${group('Audio', `
           ${toggle('sound', 'KZ sounds')}
           ${slider('volume', 'Volume', [0, 1, 0.05])}
@@ -75,6 +74,7 @@ export class SettingsPanel {
           ${toggle('hud-keys', 'Key display')}
           ${toggle('hud-pb', 'Personal best')}
           ${toggle('hud-hints', 'Control hints', 'Reset, save and return keys in the corner.')}
+          ${toggle('hud-menu-hint', 'Menu hint', 'Menu key in the top right.')}
           ${toggle('jumpStats', 'Jump stats panel')}
           ${toggle('trail', 'Last-jump trail')}`)}
       </div>
@@ -139,7 +139,6 @@ export class SettingsPanel {
       const code = encodeCrosshair(settings.crosshair);
       void navigator.clipboard.writeText(code).then(() => this.crosshairStatus(`Copied ${code}`), () => this.crosshairStatus(code));
     });
-    this.on('settings-fullscreen', 'click', () => { void (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => this.status('Fullscreen is unavailable in this browser.')); });
     this.on('view-preset', 'change', () => { const preset = viewPresets[this.input('view-preset').value]; if (preset) { settings.view = { ...preset }; this.commit(); } });
     root.querySelectorAll<HTMLInputElement>('[data-view]').forEach(input => input.addEventListener('input', () => {
       settings.view[input.dataset.view as keyof Settings['view']] = Number(input.value); this.commit();
