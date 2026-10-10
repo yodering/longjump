@@ -1,6 +1,7 @@
 // CS:GO movement in Source units (x = right, y = forward, z = up), ported from Valve's cstrike15_src:
 // game/shared/gamemovement.cpp and game/shared/cstrike15/cs_gamemovement.cpp. Function names below match theirs.
 // References and fidelity boundaries are documented in README.md.
+import type { CollisionWorld } from './collision.ts';
 export const RULES = { gravity: 800, jumpImpulse: 301.993377, maxSpeed: 250, accelerate: 5.5, airAccelerate: 12, airWishCap: 30,
   friction: 5.2, stopSpeed: 80, hull: 16, height: 72, duckHeight: 54, viewHeight: 64, duckViewHeight: 46, stepSize: 18,
   nonJumpVelocity: 140, duckModifier: 0.34, walkModifier: 0.52, duckSpeedIdeal: 8, moveSpeed: 450, maxVelocity: 3500,
@@ -17,7 +18,9 @@ export type Jump = { start: Vec; preSpeed: number; maxSpeed: number; ticks: numb
 export type Result = { distance: number; preSpeed: number; maxSpeed: number; sync: number; strafes: Strafe[];
   duration: number; ticks: number; height: number; overlap: number; deadAir: number; width: number; edge: number | null;
   path: Vec[]; landed: boolean; valid: boolean; reason: string; ducked: boolean };
-type Trace = { fraction: number; end: Vec; normal: Vec; startsolid: boolean; allsolid: boolean; box?: Box };
+// The surface a trace stopped on: a map box (z is its top) or, on whole maps, any collision primitive (z is the floor under the stop).
+export type Ground = { id: string; z: number };
+type Trace = { fraction: number; end: Vec; normal: Vec; startsolid: boolean; allsolid: boolean; box?: Box; ground?: Ground };
 export const speed = (v: Vec) => Math.hypot(v.x, v.y);
 export const clone = (v: Vec): Vec => ({ ...v });
 const dot = (a: Vec, b: Vec) => a.x * b.x + a.y * b.y + a.z * b.z;
@@ -66,6 +69,8 @@ export class Movement {
   onResult?: (result: Result) => void;
   tickRate: 64 | 128 = 128;
   boxes: Box[];
+  // Whole maps add their collision here; maps made of boxes leave it null.
+  world: CollisionWorld | null = null;
   private time = 0; private lastDuckTime = -Infinity; private rawDuck = false; private crouchSpot = { x: 0, y: 0 };
   private maxSpeed = RULES.maxSpeed; private fmove = 0; private smove = 0; private walkButton = false; private duckButton = false;
   private moveStart: Vec = clone(this.position); private moveVelocity: Vec = clone(this.velocity);
@@ -82,10 +87,13 @@ export class Movement {
     this.platform = this.support()?.id ?? ''; this.result = null;
     this.moveStart = clone(position); this.moveVelocity = clone(this.velocity);
   }
-  // The box the player stands on, if any (within CategorizePosition's 2 units).
-  support() {
-    const p = this.position, h = RULES.hull;
-    return this.boxes.find(b => p.x + h > b.min.x && p.x - h < b.max.x && p.y + h > b.min.y && p.y - h < b.max.y && p.z >= b.max.z - 1e-4 && p.z - b.max.z <= 2);
+  // The surface the player stands on, if any (within CategorizePosition's 2 units).
+  support(p: Vec = this.position): Ground | undefined {
+    const h = RULES.hull;
+    const box = this.boxes.find(b => p.x + h > b.min.x && p.x - h < b.max.x && p.y + h > b.min.y && p.y - h < b.max.y && p.z >= b.max.z - 1e-4 && p.z - b.max.z <= 2);
+    if (box || !this.world) return box && { id: box.id, z: box.max.z };
+    const tr = this.trace(p, { ...p, z: p.z - 2 });
+    return tr.ground && tr.fraction < 1 && !tr.startsolid && tr.normal.z >= 0.7 ? tr.ground : undefined;
   }
   overlaps(p: Vec, height: number) { return this.trace(p, p, height).startsolid; }
   // Eye position between the last two ticks, as the client renders the predicted player.
@@ -144,7 +152,17 @@ export class Movement {
       const hit = Math.max(0, enter);
       if (hit < fraction) { fraction = hit; box = b; normal = { x: 0, y: 0, z: 0 }; normal[axis] = sign; }
     }
-    return { fraction, end: { x: start.x + d.x * fraction, y: start.y + d.y * fraction, z: start.z + d.z * fraction }, normal, startsolid, allsolid, box };
+    let ground = box && { id: box.id, z: box.max.z };
+    // Whole maps: the nearer of the box hit and the world hit (boxes win ties).
+    const world = this.world?.trace(start, end, RULES.hull, height);
+    if (world) {
+      startsolid ||= world.startsolid; allsolid ||= world.allsolid;
+      if (world.fraction < fraction) {
+        fraction = world.fraction; normal = world.normal; box = undefined;
+        ground = { id: world.id, z: start.z + d.z * fraction - DIST_EPSILON };
+      }
+    }
+    return { fraction, end: { x: start.x + d.x * fraction, y: start.y + d.y * fraction, z: start.z + d.z * fraction }, normal, startsolid, allsolid, box, ground };
   }
   step(input: Input) {
     const dt = this.dt, p = this.position, v = this.velocity;
@@ -433,25 +451,25 @@ export class Movement {
     if (this.grounded) { moveToEnd = true; point -= RULES.stepSize; }
     if (v.z > RULES.nonJumpVelocity) { this.setGround(undefined); return; }
     const tr = this.trace(p, { ...p, z: point });
-    if (!tr.box || tr.fraction >= 1 || tr.normal.z < 0.7) {
+    if (!tr.ground || tr.fraction >= 1 || tr.normal.z < 0.7) {
       this.setGround(undefined);
       if (v.z > 0) this.surfaceFriction = 0.25;
       return;
     }
-    this.setGround(tr.box);
+    this.setGround(tr.ground);
     if (moveToEnd && !tr.startsolid && tr.fraction > 0 && tr.fraction < 1) assign(p, tr.end);
   }
-  private setGround(box: Box | undefined) {
-    if (!box) { this.grounded = false; return; }
+  private setGround(ground: Ground | undefined) {
+    if (!ground) { this.grounded = false; return; }
     const landed = !this.grounded;
-    this.grounded = true; this.platform = box.id; this.velocity.z = 0;
+    this.grounded = true; this.platform = ground.id; this.velocity.z = 0;
     if (landed && this.jump) {
-      const j = this.jump, sameHeight = Math.abs(box.max.z - j.start.z) < 0.1;
-      const groundZ = sameHeight ? j.start.z : box.max.z + DIST_EPSILON;
+      const j = this.jump, sameHeight = Math.abs(ground.z - j.start.z) < 0.1;
+      const groundZ = sameHeight ? j.start.z : ground.z + DIST_EPSILON;
       // Uncrouching can put the feet on the floor before AirMove. There is no
       // airborne segment to extrapolate in that case, and last tick's is stale.
       const endpoint = this.airMoved ? this.landingOrigin(this.moveStart, this.moveVelocity, groundZ) : { ...this.position, z: groundZ };
-      this.finish(true, box, endpoint);
+      this.finish(true, ground, endpoint);
     }
   }
   private checkFalling() {
@@ -467,11 +485,11 @@ export class Movement {
     const fraction = (origin.z - groundZ) / (-velocity.z / this.tickRate);
     return { x: origin.x + velocity.x / this.tickRate * fraction, y: origin.y + velocity.y / this.tickRate * fraction, z: groundZ };
   }
-  finish(landed: boolean, platform?: Box, endpoint = this.position) {
+  finish(landed: boolean, platform?: Ground, endpoint = this.position) {
     if (!this.jump) return;
     const j = this.jump;
     const distance = Math.hypot(endpoint.x - j.start.x, endpoint.y - j.start.y) + 32;
-    const sameHeight = Math.abs((platform?.max.z ?? j.start.z) - j.start.z) < 0.1;
+    const sameHeight = Math.abs((platform?.z ?? j.start.z) - j.start.z) < 0.1;
     const valid = landed && sameHeight && j.valid && j.ticks > this.tickRate * 0.5 && distance >= 200;
     const width = j.strafes.length ? j.strafes.reduce((sum, s) => sum + s.width, 0) / j.strafes.length : 0;
     this.result = { distance, preSpeed: j.preSpeed, maxSpeed: j.maxSpeed, sync: j.synced / Math.max(1, j.ticks) * 100,

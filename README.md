@@ -1,6 +1,6 @@
 # longjump
 
-A desktop browser long-jump practice room inspired by vanilla CS:GO KZ. Three imported Workshop long-jump maps (kz_baxter's LJ room, the default, plus two from 2014), with mouse-look and manual strafing. Built with TypeScript, Three.js and Vite.
+A desktop browser long-jump practice room inspired by vanilla CS:GO KZ. Three imported Workshop long-jump maps (kz_baxter's LJ room, the default, plus two from 2014) and Valve's de_mirage and de_nuke, whole and walkable, with mouse-look and manual strafing. Built with TypeScript, Three.js and Vite.
 
 ## Run
 
@@ -78,7 +78,7 @@ Keyboard and mouse events are timestamped and consumed by the next physics comma
 
 Remaining differences from the game:
 
-- Collision runs against the maps' axis-aligned brush boxes, not BSP brushes, so there are no slopes or ramps. The quadrant ground fallback (`TracePlayerBBoxForGround`) only matters on slopes and is omitted. The courtyard and pit floors remain walkable after misses; only falling outside the imported geometry resets the player. Ladders, water and surface properties (all friction 1) are outside this prototype.
+- On the classic maps, collision runs against the maps' axis-aligned brush boxes, not BSP brushes, so there are no slopes or ramps. The whole maps also collide with angled brushes, displacements and static prop hulls; see [Whole maps](#whole-maps). The quadrant ground fallback (`TracePlayerBBoxForGround`) only matters on slopes and is omitted. The courtyard and pit floors remain walkable after misses; only falling outside the imported geometry resets the player. Ladders, water and surface properties (all friction 1) are outside this prototype.
 - Math is double precision; Source uses 32-bit floats, so positions differ in the far decimals.
 - Distance is horizontal origin displacement plus 32 units, with GOKZ's interpolated touchdown origin. Edge is the distance from the takeoff block edge to the back of the hull. Misses are measured at the takeoff elevation. Touching any non-floor surface invalidates a jump, and jumps below 200 units do not count as bests. Sync is the share of airborne ticks with horizontal speed gain. These follow KZ conventions but are not certified GOKZ scores.
 - Mouse sensitivity defaults to Source's 0.022° per browser pixel, with imported `m_yaw` / `m_pitch` support; pointer lock requests unaccelerated input, falling back when the browser reports it unsupported. Browser event delivery and DPI can still differ from CS:GO raw input. Pitch is limited to ±89°. FOV follows Source's horizontal-at-4:3 convention, as does the viewmodel's. Crosshair sizes are CSS pixels and approximate Source's static crosshair rather than reproducing its resolution-dependent rasterization.
@@ -112,6 +112,15 @@ Both Workshop releases date to April 2014. These were general long-jump practice
 Rendering uses converted brush faces, packed VTF textures and each map's own compiled VRAD lighting. Surfaces use the style-0 lightmaps packed into one atlas per map, in Source's LDR lightmap format, with the LDR `LightmappedGeneric` combine (albedo × lightmap × 2 in gamma space). There are no dynamic lights or shadow maps on imported maps. Both maps were compiled LDR-only. Faces with normal-mapped materials use their three directional (bump) lightmaps, combined with the normal map as in `LightmappedGeneric`, including `$ssbump`. Two animated water normal maps outside the playable area fall back to the flat lightmap. Each map's 2D skybox (`sky_dust` from the CS:GO VPK, and the `italy` copy packed into kz_longjumps_go) is drawn as a depth-free background box in Source's face layout. Six 512 px faces add about 40 KB per map. Neither map has a 3D skybox. Static `infodecal`s, including the courtyard's block numbers and signs, are projected at import the way the engine places them (`R_DecalShoot` → `R_DecalVertsClip`), and are alpha-blended and lit by their surfaces' lightmaps. The GO wing's numbers are brush textures; its decals are all outside the imported wing. Stock textures the maps do not pack come from the CS:GO VPK, so no surface falls back to a flat colour. Neither imported area contains static props: the courtyard has none, and kz_longjumps_go's ten `fence01a` props are in rooms outside the wing. Other shader effects are not reproduced. `longjump_source_go` has fully axial brush collision. `kz_longjumps_go` is limited to its static 240–249 wing: 18 non-axial brushes in that crop (roof/entrance details) have visible faces but no angled collision. Invisible bounds keep the player within the supported wing. Moving entities, map triggers, teleporters, high jumps and other rooms are not implemented. The original author also marked high jumps as unsupported in their CS:GO port. `kz_baxter` (2018) contributes only its LJ block room: 89 axial lanes from 210 to 310 units along both axes, numbered by the map's own `point_worldtext` labels, which are drawn as unlit text. Its sky (`sky_csgo_cloudy01`) comes from the CS:GO VPK; the climb, hub and teleports are not imported. See [research/maps](research/maps/README.md).
 
 See [research/maps/README.md](research/maps/README.md) for research, provenance and reproducible conversion. Map assets retain their original creators' rights and attribution; we do not assign a new license to them.
+
+## Whole maps
+
+| Map | Collision | Static props | Download |
+| --- | --- | --- | --- |
+| de_mirage | 4,193 boxes, 3,765 angled brushes, 93,242 displacement and prop-hull triangles | 1,697 of 241 models | 28 MB |
+| de_nuke | 5,154 boxes, 1,527 angled brushes, 157,094 displacement and prop-hull triangles | 6,690 of 1,392 models | 41 MB |
+
+Valve's competitive maps come from the final CS:GO content depot and are imported whole, with no fixed lanes: a jump counts anywhere it lands at its takeoff height. Angled brushes are clipped with their bevel planes as `CM_ClipBoxToBrush` does, and displacements and static props (their PHY hulls) collide per triangle. The leaderboard server loads the same collision and reruns jumps against it. Surfaces use the maps' HDR lightmaps in the classic maps' LDR combine, displacements blend their two textures, and props use VRAD's baked per-vertex lighting. Overlays, the 3D skybox, water, dynamic props and doors are not imported, and ladders are not climbable. See [research/whole-maps](research/whole-maps/README.md) for provenance, reproduction and conversion details.
 
 ## Viewmodel
 

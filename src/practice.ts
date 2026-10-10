@@ -16,7 +16,7 @@ export function blockAt(lanes: Lane[], supportId: string) {
 }
 export function belowMap(map: ImportedMap | null, feet: Vec) {
   // Imported grass and pit floors are walkable. Only falling out of the map resets.
-  const bottom = map ? Math.min(...map.boxes.map(b => b.min.z)) - 180 : -180;
+  const bottom = map ? (map.collision ? map.collision.min[2] : Math.min(...map.boxes.map(b => b.min.z))) - 180 : -180;
   return feet.z < bottom;
 }
 export function concreteBoxes() { return createMap(CONCRETE_GAP); }
