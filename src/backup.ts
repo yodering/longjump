@@ -105,7 +105,7 @@ export function checkpointForMap(checkpoints: SavedPosition[], id: MapId, versio
   if (!c || movement.overlaps(c.position, RULES.height)) return null;
   const p = c.position, h = RULES.hull;
   const support = movement.boxes.some(b => p.x + h > b.min.x && p.x - h < b.max.x && p.y + h > b.min.y
-    && p.y - h < b.max.y && p.z >= b.max.z && p.z - b.max.z <= 2);
+    && p.y - h < b.max.y && p.z >= b.max.z && p.z - b.max.z <= 2) || !!movement.world && !!movement.support(p);
   return support ? { position: { ...p }, yaw: c.yaw, pitch: c.pitch } : null;
 }
 export function equivalentAttempt(a: SavedEntry, b: SavedEntry) {

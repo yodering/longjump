@@ -110,6 +110,7 @@ app.innerHTML = `
         <li><a href="https://steamcommunity.com/sharedfiles/filedetails/?id=249758765" target="_blank" rel="noreferrer">longjump_source_go</a><p>Original by AZiRES. CS:GO port by badgec / kernel.</p></li>
         <li><a href="https://steamcommunity.com/sharedfiles/filedetails/?id=249444895" target="_blank" rel="noreferrer">kz_longjumps_go</a><p>Draw (CS 1.6), THEBUGUSER (Source), badgec / kernel (CS:GO).</p></li>
         <li><a href="https://steamcommunity.com/sharedfiles/filedetails/?id=1366794864" target="_blank" rel="noreferrer">kz_baxter</a><p>Samuel. LJ room by xq. Textures by TopHATTwaffle &amp; Saspatoon.</p></li>
+        <li>de_mirage · de_nuke<p>Valve's Counter-Strike: Global Offensive maps.</p></li>
       </ul>
     </section>
     <section class="about-credits" aria-labelledby="movement-credits-title">
@@ -258,9 +259,9 @@ async function changeMap(id: MapId) {
   const previous = settings.mapId;
   try {
     const data = await loadMap(id);
-    const version = await fingerprint(JSON.stringify({ boxes: data.boxes, entry: data.entry, lanes: data.lanes }));
+    const version = await fingerprint(JSON.stringify({ boxes: data.boxes, entry: data.entry, lanes: data.lanes, collision: data.collision?.sha256 }));
     await world.buildImported(id, data);
-    classic = data; settings.mapId = id; document.body.dataset.map = id; movement.boxes = data.boxes;
+    classic = data; settings.mapId = id; document.body.dataset.map = id; movement.boxes = data.boxes; movement.world = data.world ?? null;
     started = false; mapContentVersion = version;
     checkpoint = checkpointForMap(savedPositions, id, version, movement);
     const info = maps.find(m => m.id === id)!;

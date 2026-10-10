@@ -50,7 +50,7 @@ export function createLeaderboard(config: LeaderboardConfig) {
   for (const row of db.query<{ id: string; replay: string }, [string]>('SELECT id, replay FROM entry WHERE stats IS NULL AND physicsVersion = ?').all(config.physicsVersion)) {
     try {
       const replay = parseReplay(JSON.parse(row.replay)), map = config.maps[replay.mapId];
-      if (map) db.query('UPDATE entry SET stats = ? WHERE id = ?').run(JSON.stringify(jumpStats(verifyReplay(replay, map.boxes))), row.id);
+      if (map) db.query('UPDATE entry SET stats = ? WHERE id = ?').run(JSON.stringify(jumpStats(verifyReplay(replay, map.boxes, map.world))), row.id);
     } catch { /* Leave stats empty; the distance stays as verified. */ }
   }
   const board = (tick: number | null) => db.query<Record<string, unknown>, [number, number, number]>(`SELECT e.id, p.name, e.distance, e.tickRate, e.mapId, e.stats, e.at
@@ -116,7 +116,7 @@ export function createLeaderboard(config: LeaderboardConfig) {
       const map = config.maps[replay.mapId];
       if (!map || map.contentVersion !== replay.mapContentVersion) throw new HttpError(409, 'This map version can’t post jumps. Reload the game.');
       let result;
-      try { result = verifyReplay(replay, map.boxes); } catch (error) { throw new HttpError(422, (error as Error).message); }
+      try { result = verifyReplay(replay, map.boxes, map.world); } catch (error) { throw new HttpError(422, (error as Error).message); }
       if (!result.valid) throw new HttpError(422, `This jump doesn’t count: ${result.reason.toLowerCase()}.`);
       const id = crypto.randomUUID(), now = Date.now();
       const saved = db.query(`INSERT INTO entry (id, playerId, tickRate, distance, mapId, preSpeed, sync, strafes, ducked, physicsVersion, replay, stats, at)

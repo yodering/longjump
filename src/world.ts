@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { createMap, type Vec } from './physics';
-import type { ImportedMap, MapId } from './maps';
+import type { ImportedMap, MapId, PropMesh } from './maps';
 import { Viewmodel } from './viewmodel';
-import { lightmappedMaterial } from './lightmapped';
+import { lightmappedMaterial, vertexLitMaterial } from './lightmapped';
 import { MapLighting } from './map-lighting';
 import { displayLayout } from './display.ts';
 import type { Settings } from './settings.ts';
@@ -51,6 +51,61 @@ async function skybox(base: string, faces: Record<keyof typeof SKY_FACES, string
   }));
   group.scale.setScalar(16);
   return group;
+}
+// IEEE 754 half-precision values for every 16-bit pattern (prop uvs are stored as float16).
+let halfTable: Float32Array | null = null;
+function halfFloats() {
+  if (halfTable) return halfTable;
+  halfTable = new Float32Array(65536);
+  for (let h = 0; h < 65536; h++) {
+    const sign = h & 0x8000 ? -1 : 1, exponent = h >> 10 & 31, fraction = h & 1023;
+    halfTable[h] = sign * (exponent === 0 ? fraction * 2 ** -24 : exponent === 31 ? (fraction ? NaN : Infinity) : (1 + fraction / 1024) * 2 ** (exponent - 15));
+  }
+  return halfTable;
+}
+// Static props, one merged mesh per material: each instance's model-space vertices placed by its 3x4 transform
+// (Source axes, converted to three.js) with its own baked colours.
+async function staticProps(id: MapId, props: NonNullable<ImportedMap['props']>, geometry: NonNullable<ImportedMap['propGeometry']>, loader: THREE.TextureLoader) {
+  type Model = NonNullable<ImportedMap['props']>['models'][number];
+  const parts = new Map<number, { matrix: number[]; part: PropMesh; color: number; model: Model }[]>();
+  for (const instance of props.instances) {
+    let color = instance.colorStart;
+    const model = props.models[instance.model];
+    for (const part of model.meshes) {
+      if (!parts.has(part.material)) parts.set(part.material, []);
+      parts.get(part.material)!.push({ matrix: instance.matrix, part, color, model }); color += part.vertexCount;
+    }
+  }
+  const { positions, uvs, indices, colors } = geometry;
+  const half = halfFloats();
+  return Promise.all([...parts].map(async ([material, list]) => {
+    const source = props.materials[material];
+    const vertices = list.reduce((n, p) => n + p.part.vertexCount, 0), count = list.reduce((n, p) => n + p.part.indexCount, 0);
+    const position = new Float32Array(vertices * 3), uv = new Float32Array(vertices * 2), light = new Uint8Array(vertices * 3), index = new Uint32Array(count);
+    let v = 0, i = 0;
+    for (const { matrix: m, part, color, model } of list) {
+      const [ox, oy, oz] = model.offset ?? [0, 0, 0], [sx, sy, sz] = model.scale ?? [1, 1, 1];
+      for (let k = 0; k < part.vertexCount; k++) {
+        const s = (part.vertexStart + k) * 3, o = (v + k) * 3;
+        const x = ox + positions[s] * sx, y = oy + positions[s + 1] * sy, z = oz + positions[s + 2] * sz;
+        position[o] = m[0] * x + m[1] * y + m[2] * z + m[3];
+        position[o + 1] = m[8] * x + m[9] * y + m[10] * z + m[11];
+        position[o + 2] = -(m[4] * x + m[5] * y + m[6] * z + m[7]);
+        uv[(v + k) * 2] = half[uvs[(part.vertexStart + k) * 2]]; uv[(v + k) * 2 + 1] = half[uvs[(part.vertexStart + k) * 2 + 1]];
+      }
+      light.set(colors.subarray(color * 3, (color + part.vertexCount) * 3), v * 3);
+      for (let k = 0; k < part.indexCount; k++) index[i + k] = v + indices[part.indexStart + k];
+      v += part.vertexCount; i += part.indexCount;
+    }
+    const merged = new THREE.BufferGeometry();
+    merged.setAttribute('position', new THREE.BufferAttribute(position, 3));
+    merged.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    merged.setAttribute('light', new THREE.BufferAttribute(light, 3, true));
+    merged.setIndex(new THREE.BufferAttribute(index, 1));
+    const map = source.texture ? await loader.loadAsync(`${import.meta.env.BASE_URL}maps/${id}/${source.texture}`) : null;
+    if (map) { map.wrapS = map.wrapT = THREE.RepeatWrapping; map.anisotropy = 8; }
+    return new THREE.Mesh(merged, vertexLitMaterial(map, source.alpha ? 0.4 : 0));
+  }));
 }
 // Source angles (pitch, yaw, roll in degrees) to three.js right / up / forward vectors (AngleVectors).
 function angleVectors([pitch, yaw, roll]: number[]) {
@@ -202,22 +257,25 @@ export class World {
         const results = await Promise.allSettled([...used].map(async i => {
           const source = data.materials[i];
           const bumped = !!source.normalMap && data.meshes.some(m => m.material === i && m.lmStep);
-          const [map, normalMap] = await Promise.all([source.texture, bumped ? source.normalMap : undefined].map(file =>
+          const blended = !!source.texture2 && data.meshes.some(m => m.material === i && m.blend);
+          const [map, normalMap, map2] = await Promise.all([source.texture, bumped ? source.normalMap : undefined, blended ? source.texture2 : undefined].map(file =>
             file ? loader.loadAsync(`${import.meta.env.BASE_URL}maps/${id}/${file}`) : Promise.resolve(null)));
-          for (const texture of [map, normalMap]) if (texture) { texture.wrapS = texture.wrapT = THREE.RepeatWrapping; texture.anisotropy = 8; }
+          for (const texture of [map, normalMap, map2]) if (texture) { texture.wrapS = texture.wrapT = THREE.RepeatWrapping; texture.anisotropy = 8; }
           if (normalMap) normalMap.colorSpace = THREE.NoColorSpace;
           materials.set(i, lightmappedMaterial(map, source.color, lightmap!, source.alpha ? 0.4 : 0, undefined,
-            normalMap ? { normalMap, ssbump: !!source.ssbump } : undefined));
+            normalMap ? { normalMap, ssbump: !!source.ssbump } : undefined, map2));
         }));
         const failed = results.find(r => r.status === 'rejected');
         if (failed?.status === 'rejected') throw failed.reason;
-        const convert = (values: number[]) => { const result = new Float32Array(values.length); for (let i = 0; i < values.length; i += 3) { result[i] = values[i]; result[i + 1] = values[i + 2]; result[i + 2] = -values[i + 1]; } return result; };
+        const convert = (values: ArrayLike<number>) => { const result = new Float32Array(values.length); for (let i = 0; i < values.length; i += 3) { result[i] = values[i]; result[i + 1] = values[i + 2]; result[i + 2] = -values[i + 1]; } return result; };
         for (const mesh of data.meshes) {
           const geometry = new THREE.BufferGeometry();
           geometry.setAttribute('position', new THREE.BufferAttribute(convert(mesh.positions), 3));
           geometry.setAttribute('uv', new THREE.Float32BufferAttribute(mesh.uvs, 2));
           geometry.setAttribute('uv1', new THREE.Float32BufferAttribute(mesh.uv2, 2));
           if (mesh.lmStep) geometry.setAttribute('lmStep', new THREE.Float32BufferAttribute(mesh.lmStep, 1));
+          if (mesh.blend) geometry.setAttribute('blend', new THREE.BufferAttribute(mesh.blend, 1));
+          if (mesh.index) geometry.setIndex(new THREE.BufferAttribute(mesh.index, 1));
           const object = new THREE.Mesh(geometry, materials.get(mesh.material)!); group.add(object);
         }
         // Static decals (block numbers, signs), drawn after the world with the surfaces' lightmaps.
@@ -234,7 +292,8 @@ export class World {
           const object = new THREE.Mesh(geometry, decalMaps[mesh.material]); object.renderOrder = 1; group.add(object);
         }
         if (data.worldText?.length) group.add(worldText(data.worldText));
-      } catch (error) { for (const m of materials.values()) { m.uniforms.map.value?.dispose(); m.uniforms.normalMap.value?.dispose(); m.dispose(); } lightmap?.dispose(); throw error; }
+        if (data.props && data.propGeometry) for (const mesh of await staticProps(id, data.props, data.propGeometry, loader)) group.add(mesh);
+      } catch (error) { for (const m of materials.values()) { m.uniforms.map.value?.dispose(); m.uniforms.normalMap.value?.dispose(); m.uniforms.map2.value?.dispose(); m.dispose(); } lightmap?.dispose(); throw error; }
       this.lightmap?.dispose(); this.lightmap = lightmap;
       const sky = data.sky ? await skybox(`${import.meta.env.BASE_URL}maps/${id}`, data.sky.faces).catch(error => { console.warn('Skybox failed to load', error); return null; }) : null;
       this.disposeGroup(this.sky); if (sky) this.sky.add(...sky.children.splice(0)), this.sky.scale.copy(sky.scale);
@@ -259,7 +318,7 @@ export class World {
     }
   }
   disposeGroup(group: THREE.Group) {
-    group.traverse(o => { if (o instanceof THREE.Mesh || o instanceof THREE.Line) { o.geometry.dispose(); for (const m of Array.isArray(o.material) ? o.material : [o.material]) { if ('map' in m) (m as THREE.MeshStandardMaterial).map?.dispose(); if (m instanceof THREE.ShaderMaterial) { m.uniforms.map?.value?.dispose(); m.uniforms.normalMap?.value?.dispose(); } m.dispose(); } } }); group.clear();
+    group.traverse(o => { if (o instanceof THREE.Mesh || o instanceof THREE.Line) { o.geometry.dispose(); for (const m of Array.isArray(o.material) ? o.material : [o.material]) { if ('map' in m) (m as THREE.MeshStandardMaterial).map?.dispose(); if (m instanceof THREE.ShaderMaterial) { m.uniforms.map?.value?.dispose(); m.uniforms.normalMap?.value?.dispose(); m.uniforms.map2?.value?.dispose(); } m.dispose(); } } }); group.clear();
   }
   preview(time: number) {
     this.camera.fov = 66; this.camera.updateProjectionMatrix();

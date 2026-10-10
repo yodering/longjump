@@ -5,6 +5,10 @@ import * as THREE from 'three';
 // result is written out as display colour, so no lights, shadows or tone mapping run for map surfaces.
 const vertexShader = /* glsl */`
 attribute vec2 uv1;
+#ifdef BLEND
+attribute float blend;
+varying float vBlend;
+#endif
 #ifdef BUMP
 attribute float lmStep;
 varying float vLightmapStep;
@@ -13,6 +17,9 @@ varying vec2 vUv;
 varying vec2 vLightmapUv;
 void main() {
   vUv = uv; vLightmapUv = uv1;
+  #ifdef BLEND
+  vBlend = blend;
+  #endif
   #ifdef BUMP
   vLightmapStep = lmStep;
   #endif
@@ -20,6 +27,11 @@ void main() {
 }`;
 const fragmentShader = /* glsl */`
 uniform sampler2D map, lightmap;
+#ifdef BLEND
+// WorldVertexTransition: displacement vertex alpha blends $basetexture into $basetexture2.
+uniform sampler2D map2;
+varying float vBlend;
+#endif
 uniform bool hasMap;
 uniform vec3 color;
 uniform float alphaTest;
@@ -51,6 +63,9 @@ vec3 lightmapSample() { return texture2D( lightmap, vLightmapUv ).rgb; }
 #endif
 void main() {
   vec4 albedo = hasMap ? texture2D( map, vUv ) : vec4( color, 1.0 );
+  #ifdef BLEND
+  albedo = mix( albedo, texture2D( map2, vUv ), vBlend );
+  #endif
   if ( albedo.a < alphaTest ) discard;
   // DecalModulate is a 2x multiply with the framebuffer (src * dst + dst * src); the shader just outputs the texture.
   if ( modulate ) { gl_FragColor = vec4( mix( vec3( 0.5 ), albedo.rgb, albedo.a ), 1.0 ); return; }
@@ -59,7 +74,8 @@ void main() {
 }`;
 
 export function lightmappedMaterial(map: THREE.Texture | null, reflectivity: number[], lightmap: THREE.Texture, alphaTest: number,
-  decal?: { blend: 'alpha' | 'modulate'; lit: boolean }, bump?: { normalMap: THREE.Texture; ssbump: boolean }) {
+  decal?: { blend: 'alpha' | 'modulate'; lit: boolean }, bump?: { normalMap: THREE.Texture; ssbump: boolean }, map2?: THREE.Texture | null) {
+  if (map2) map2.colorSpace = THREE.NoColorSpace;
   if (map) map.colorSpace = THREE.NoColorSpace;
   // Texture reflectivity (texdata) is linear; the shader works in gamma space.
   const color = new THREE.Color(...reflectivity.map(v => Math.pow(v, 1 / 2.2)) as [number, number, number]);
@@ -68,13 +84,42 @@ export function lightmappedMaterial(map: THREE.Texture | null, reflectivity: num
     uniforms: { map: { value: map }, hasMap: { value: !!map }, color: { value: color }, lightmap: { value: lightmap },
       // A negative alphaTest marks a blended decal: output the texture's alpha instead of testing it.
       alphaTest: { value: decal ? -1 : alphaTest }, lit: { value: decal ? decal.lit : true }, modulate: { value: decal?.blend === 'modulate' },
-      normalMap: { value: bump?.normalMap ?? null }, ssbump: { value: bump?.ssbump ?? false } },
-    // Only bump-mapped materials compile the extra lightmap and normal fetches.
-    defines: bump ? { BUMP: '' } : {},
+      normalMap: { value: bump?.normalMap ?? null }, ssbump: { value: bump?.ssbump ?? false }, map2: { value: map2 ?? null } },
+    // Only bump-mapped or blended materials compile the extra fetches.
+    defines: { ...(bump ? { BUMP: '' } : {}), ...(map2 ? { BLEND: '' } : {}) },
   });
   if (decal) {
     Object.assign(material, { transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 });
     if (decal.blend === 'modulate') Object.assign(material, { blending: THREE.CustomBlending, blendSrc: THREE.DstColorFactor, blendDst: THREE.SrcColorFactor });
   }
   return material;
+}
+
+// Static props: VertexLitGeneric lit by VRAD's baked per-vertex lighting (the prop's .vhv), combined like a lightmap.
+const propVertexShader = /* glsl */`
+attribute vec3 light;
+varying vec3 vLight;
+varying vec2 vUv;
+void main() {
+  vUv = uv; vLight = light;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+}`;
+const propFragmentShader = /* glsl */`
+uniform sampler2D map;
+uniform bool hasMap;
+uniform float alphaTest;
+varying vec3 vLight;
+varying vec2 vUv;
+void main() {
+  vec4 albedo = hasMap ? texture2D( map, vUv ) : vec4( 1.0 );
+  if ( albedo.a < alphaTest ) discard;
+  gl_FragColor = vec4( min( albedo.rgb * vLight * 2.0, 1.0 ), 1.0 );
+}`;
+
+export function vertexLitMaterial(map: THREE.Texture | null, alphaTest: number) {
+  if (map) map.colorSpace = THREE.NoColorSpace;
+  return new THREE.ShaderMaterial({
+    vertexShader: propVertexShader, fragmentShader: propFragmentShader, side: THREE.DoubleSide,
+    uniforms: { map: { value: map }, hasMap: { value: !!map }, alphaTest: { value: alphaTest } },
+  });
 }

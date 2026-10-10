@@ -165,9 +165,9 @@ test('Scores persist across restarts and migrations apply once', async () => {
 
 test('Server rule fingerprints match what the game computes', async () => {
   const { fingerprint } = await import('../src/backup.ts');
-  for (const id of ['longjump_source_go', 'kz_longjumps_go']) {
+  for (const id of ['longjump_source_go', 'kz_longjumps_go', 'de_mirage', 'de_nuke']) {
     const data = await Bun.file(`public/maps/${id}/map.json`).json();
-    assert.equal(loadMapRules(id).contentVersion, await fingerprint(JSON.stringify({ boxes: data.boxes, entry: data.entry, lanes: data.lanes })));
+    assert.equal(loadMapRules(id).contentVersion, await fingerprint(JSON.stringify({ boxes: data.boxes, entry: data.entry, lanes: data.lanes, collision: data.collision?.sha256 })));
   }
   assert.match(physicsVersion(), /^[0-9a-f]{64}$/);
 });

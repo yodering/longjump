@@ -1,4 +1,5 @@
 import { Movement, DIST_EPSILON, RULES, type Box, type Input, type MovementState, type Result, type Vec } from './physics';
+import type { CollisionWorld } from './collision';
 
 // A jump replay is the movement state on the takeoff tick plus every command
 // until the result. The leaderboard reruns it with the same physics, so a
@@ -51,13 +52,13 @@ export function parseReplay(value: unknown): Replay {
  * The takeoff state must be standing on solid ground at rest height, and the
  * first command must start the jump; the last command must finish it.
  */
-export function verifyReplay(replay: Replay, boxes: Box[]): Result {
-  const m = new Movement(); m.boxes = boxes; m.tickRate = replay.tickRate; m.autoBhop = false;
+export function verifyReplay(replay: Replay, boxes: Box[], world: CollisionWorld | null = null): Result {
+  const m = new Movement(); m.boxes = boxes; m.world = world; m.tickRate = replay.tickRate; m.autoBhop = false;
   m.restore(replay.state);
   const s = replay.state, support = m.support();
   // Ground states never carry vertical speed or the airborne deadstrafe friction.
   if (!s.grounded || !support || s.velocity.z !== 0 || s.surfaceFriction !== 1
-    || Math.abs(s.position.z - (support.max.z + DIST_EPSILON)) > 1e-3 || Math.hypot(s.velocity.x, s.velocity.y) > RULES.maxVelocity)
+    || Math.abs(s.position.z - (support.z + DIST_EPSILON)) > 1e-3 || Math.hypot(s.velocity.x, s.velocity.y) > RULES.maxVelocity)
     throw new Error('The jump must start from solid ground.');
   if (m.overlaps(s.position, m.hullHeight)) throw new Error('The jump starts inside the map.');
   let result = null as Result | null;
