@@ -10,8 +10,11 @@ import numpy as np
 
 SPRP = 0x73707270
 METERS_TO_INCHES = 1 / 0.0254
-SOLID_BBOX, SOLID_VPHYSICS = 2, 6
+SOLID_NONE, SOLID_BBOX, SOLID_VPHYSICS = 0, 2, 6
 FLAG_NO_DRAW = 0x4
+DYNAMIC_CLASSES = ('prop_dynamic', 'prop_dynamic_override', 'prop_physics', 'prop_physics_override', 'prop_physics_multiplayer')
+SF_DYNAMICPROP_DISABLE_COLLISION = 256
+PHYSICS_MULTIPLAYER_SOLID = 1
 
 
 def i32(d, o): return struct.unpack_from('<i', d, o)[0]
@@ -40,6 +43,31 @@ def read_static_props(bsp):
                           'scale': scale or 1.0, 'leaves': leaves[first_leaf:first_leaf + leafs]})
         return props
     return []
+
+
+def entity_props(entities, leaf_at):
+    """Model entities placed like static props at their spawn pose, in read_static_props' shape (index None: no baked
+    lighting). Solidity follows the entity: prop_dynamic by its `solid` keyvalue unless spawnflag 256 disables
+    collision; prop_physics_multiplayer only with physicsmode 1 (autodetect can make it client-side debris), drawn but
+    not solid otherwise. They never move. Doors open in game, so prop_door_rotating is left out; the second result
+    counts what was skipped."""
+    out = []; skipped = collections.Counter()
+    for e in entities:
+        c = e.get('classname', ''); model = e.get('model', '').replace('\\', '/').lower()
+        if c == 'prop_door_rotating': skipped[c] += 1; continue
+        if c not in DYNAMIC_CLASSES or not model.endswith('.mdl'): continue
+        if e.get('StartDisabled') == '1': skipped['disabled'] += 1; continue
+        number = lambda key, default: float(e.get(key) or default)
+        if c == 'prop_physics_multiplayer':
+            solid = SOLID_VPHYSICS if int(number('physicsmode', 0)) == PHYSICS_MULTIPLAYER_SOLID else SOLID_NONE
+            if not solid: skipped['non-solid physics'] += 1
+        elif c.startswith('prop_physics'): solid = SOLID_VPHYSICS
+        else: solid = SOLID_NONE if int(number('spawnflags', 0)) & SF_DYNAMICPROP_DISABLE_COLLISION else int(number('solid', SOLID_VPHYSICS))
+        origin = tuple(float(v) for v in e.get('origin', '0 0 0').split())
+        out.append({'index': None, 'model': model, 'origin': origin, 'angles': tuple(float(v) for v in e.get('angles', '0 0 0').split()),
+                    'solid': solid, 'flags': FLAG_NO_DRAW if e.get('rendermode') == '10' else 0, 'skin': int(number('skin', 0)),
+                    'scale': number('modelscale', 1) or 1.0, 'leaves': (leaf_at(origin),), 'entity': c})
+    return out, skipped
 
 
 class PropModel:
@@ -161,12 +189,13 @@ def vertex_colors(vhv, mesh):  # noqa: E302
     return data.mean(axis=1)
 
 
-def import_props(read, bsp, rotation, in_sky, ambient_at, save_texture, material_info, output):
+def import_props(read, bsp, rotation, in_sky, ambient_at, save_texture, material_info, output, extra=()):
     """props.bin.gz: each model's LOD0 geometry once in model space (positions as int16 over the model's bounds, uvs as
     float16) and u16 indices local to each mesh; prop-colors.bin.gz: every instance's baked colours (u8 RGB per vertex,
     meshes in model order). map.json gets the
-    models, materials and instances (model, 3x4 transform, colour offset). Also returns collision triangles."""
-    props = read_static_props(bsp)
+    models, materials and instances (model, 3x4 transform, colour offset). `extra` adds entity props (see entity_props).
+    Also returns collision triangles."""
+    static = read_static_props(bsp); props = static + list(extra)
     loaded = {}; missing = collections.Counter(); materials = []; material_index = {}
     models = []; model_index = {}; instances = []; collision = []; skipped_sky = unlit = 0
     positions, uvs, indices, colors = [], [], [], []
@@ -221,7 +250,7 @@ def import_props(read, bsp, rotation, in_sky, ambient_at, save_texture, material
             model_index[key] = len(models); models.append({'name': name, 'meshes': parts, **bounds})
         entry = models[model_index[key]]
         if not entry['meshes']: continue
-        vhv = read(f'sp_hdr_{prop["index"]}.vhv') or read(f'sp_{prop["index"]}.vhv')
+        vhv = None if prop['index'] is None else read(f'sp_hdr_{prop["index"]}.vhv') or read(f'sp_{prop["index"]}.vhv')
         instance_colors = []
         for part in entry['meshes']:
             mesh = meshes[part['mesh']]; baked = vertex_colors(vhv, mesh)
@@ -237,7 +266,7 @@ def import_props(read, bsp, rotation, in_sky, ambient_at, save_texture, material
     blob += b''.join(a.astype(np.float16).tobytes() for a in uvs) + b''.join(a.tobytes() for a in indices)
     (output / 'props.bin.gz').write_bytes(gzip.compress(blob, compresslevel=9, mtime=0))
     (output / 'prop-colors.bin.gz').write_bytes(gzip.compress(b''.join(a.tobytes() for a in colors), compresslevel=9, mtime=0))
-    print(f'props: {len(instances)} drawn of {len(props)} ({skipped_sky} in the 3D skybox), {len(models)} models with {vertex_total} vertices and '
+    print(f'props: {len(instances)} drawn of {len(static)} static and {len(props) - len(static)} entity props ({skipped_sky} in the 3D skybox), {len(models)} models with {vertex_total} vertices and '
           f'{index_total // 3} triangles, {color_total} instance vertices, {unlit} meshes without baked lighting; '
           f'collision triangles {len(collision)}; problems {dict(missing)}')
     return {'file': 'props.bin.gz', 'colorFile': 'prop-colors.bin.gz', 'vertices': vertex_total, 'indices': index_total, 'colors': color_total, 'materials': materials,

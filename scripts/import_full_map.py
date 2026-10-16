@@ -18,6 +18,8 @@ from import_source_map import decode_vtf, export_sky, project_decals, vec  # noq
 import static_props  # noqa: E402
 
 PLAYER_SOLID = 0x1 | 0x2 | 0x8 | 0x10000  # CONTENTS_SOLID | WINDOW | GRATE | PLAYERCLIP
+CONTENTS_LADDER = 0x20000000
+SOLID, LADDER = 1, 2  # per-primitive contents in collision.bin (see src/collision.ts)
 SURF_SKIP_DRAW = 0x2 | 0x4 | 0x40 | 0x80 | 0x100 | 0x200  # sky2d, sky, trigger, nodraw, hint, skip
 SURF_BUMPLIGHT = 0x800
 DISPTRI_TAG_REMOVE = 1 << 5
@@ -252,9 +254,11 @@ def convert(source, output, vpk_path):
 
     # --- collision brushes: axial ones as boxes, the rest as bevelled plane sets ---
     brushes = bsp.records(18, '<3i'); sides = bsp.records(19, '<Hhhh')
-    boxes = []; hulls = []; skipped_sky_brushes = 0
+    boxes = []; hulls = []; skipped_sky_brushes = 0; ladder_only = 0
     for index, (first, num, contents) in enumerate(brushes):
-        if not contents & PLAYER_SOLID: continue
+        # LadderMove finds ladders with a MASK_PLAYERSOLID trace, so a ladder that is not also player-solid is unreachable.
+        if not contents & PLAYER_SOLID: ladder_only += bool(contents & CONTENTS_LADDER); continue
+        flags = SOLID | (LADDER if contents & CONTENTS_LADDER else 0)
         entity = brush_entity.get(index)
         if not solid(entity): continue
         if entity is None and in_sky(brush_areas.get(index, set())): skipped_sky_brushes += 1; continue
@@ -272,11 +276,11 @@ def convert(source, output, vpk_path):
             if n[axis] > 0: hi[axis] = min(hi[axis], n[3])
             else: lo[axis] = max(lo[axis], -n[3])
         if not all(math.isfinite(v) for v in lo + hi): continue
-        if axial: boxes.append(lo + hi)
+        if axial: boxes.append((lo + hi, flags))
         else:
             corners = brush_corners(brush_planes)
             if corners is None: continue
-            hulls.append((brush_planes, corners.min(axis=0).tolist() + corners.max(axis=0).tolist()))
+            hulls.append((brush_planes, corners.min(axis=0).tolist() + corners.max(axis=0).tolist(), flags))
 
     # --- static props: batched geometry with baked vertex lighting, and their hulls for collision ---
     ambient_index = bsp.records(51 if hdr else 52, '<2H'); ambient = bsp.lump(55 if hdr else 56)
@@ -287,8 +291,10 @@ def convert(source, output, vpk_path):
         cubes = np.frombuffer(ambient, np.uint8, count * 28, first * 28).reshape(count, 28)[:, :24].reshape(-1, 4)
         linear = cubes[:, :3] * np.ldexp(1.0, cubes[:, 3].view(np.int8).astype(np.int32))[:, None] / 255
         return np.clip(linear.mean(axis=0) / 2, 0, 1) ** (1 / 2.2) * 255
+    dynamic, skipped_entities = static_props.entity_props(entities, leaf_at)
+    print(f'entity props: {len(dynamic)} placed at their spawn pose, {sum(p["solid"] != 0 for p in dynamic)} solid; skipped {dict(skipped_entities)}')
     props, prop_tris = static_props.import_props(read, bsp, rotation, lambda ids: in_sky({leaves[l][1] for l in ids if leaves[l][1] >= 0}),
-                                                 ambient_at, save_texture, material_info, output)
+                                                 ambient_at, save_texture, material_info, output, dynamic)
     collision_tris += prop_tris
     collision_bytes = write_collision(output / 'collision.bin.gz', boxes, hulls, collision_tris)
 
@@ -327,13 +333,14 @@ def convert(source, output, vpk_path):
     sky = export_sky(skyname.lower(), pak, paknames, vpk_path, output) if skyname else None
     spawns = [{'team': e['classname'][len('info_player_'):], 'position': [float(v) for v in e['origin'].split()],
                'yaw': float(e.get('angles', '0 0 0').split()[1])} for e in entities if e.get('classname') in ('info_player_counterterrorist', 'info_player_terrorist')]
-    bounds = np.array([b for b in boxes] + [h[1] for h in hulls]).reshape(-1, 6)
+    bounds = np.array([b[0] for b in boxes] + [h[1] for h in hulls]).reshape(-1, 6)
     result = {'format': 2, 'sourceFile': source.name, 'sha256': hashlib.sha256(data).hexdigest(), 'hdr': hdr,
               'materials': materials, 'meshes': meshes,
               'geometry': {'file': 'world.bin.gz', 'vertices': vertex_count, 'indices': index_count},
               'lightmap': {'texture': 'lightmap.webp', 'width': width, 'height': height},
               'collision': {'file': 'collision.bin.gz', 'sha256': hashlib.sha256(collision_bytes).hexdigest(),
                             'boxes': len(boxes), 'hulls': len(hulls), 'triangles': len(collision_tris),
+                            'ladders': sum(1 for b in boxes + hulls if b[-1] & LADDER),
                             'min': bounds[:, :3].min(axis=0).tolist(), 'max': bounds[:, 3:].max(axis=0).tolist()},
               'decals': decals, 'sky': sky, 'spawns': spawns, 'boxes': [], 'props': props}
     result['lighting'] = model_lighting(bsp, hdr, planes, nodes, leaves, output)
@@ -341,7 +348,8 @@ def convert(source, output, vpk_path):
     (output / 'map.json').write_text(json.dumps(result, separators=(',', ':')))
     (output / 'entities.json').write_text(json.dumps(entities, indent=1))
     print(f'{source.name}: {len(meshes)} materials, {index_count // 3} triangles, {vertex_count} vertices; collision {len(boxes)} boxes, '
-          f'{len(hulls)} brushes, {len(collision_tris)} displacement and prop triangles; 3D skybox faces/brushes left out: {skipped_sky}/{skipped_sky_brushes}')
+          f'{len(hulls)} brushes, {len(collision_tris)} displacement and prop triangles, {result["collision"]["ladders"]} ladder brushes '
+          f'({ladder_only} ladder-only brushes skipped); 3D skybox faces/brushes left out: {skipped_sky}/{skipped_sky_brushes}')
 
 
 def placement(entities, spawns, floor):
@@ -406,15 +414,16 @@ def write_gzip(path, data):
 
 
 def write_collision(path, boxes, hulls, triangles):
-    """collision.bin (little-endian): 'LJC1', counts (boxes, brushes, planes, triangles), then boxes as min/max f32x6,
-    brushes as (first plane u32, plane count u32), brush bounds f32x6, planes f32x4 (normal, dist), triangles f32x9."""
+    """collision.bin (little-endian): 'LJC2', counts (boxes, brushes, planes, triangles), then boxes as min/max f32x6,
+    brushes as (first plane u32, plane count u32), brush bounds f32x6, planes f32x4 (normal, dist), triangles f32x9,
+    and a contents byte (SOLID | LADDER) for each box, then each brush. Triangles are always solid."""
     plane_list = []; brush_index = []
-    for brush_planes, _ in hulls:
+    for brush_planes, _, _ in hulls:
         brush_index.append((len(plane_list), len(brush_planes))); plane_list += brush_planes
-    header = b'LJC1' + struct.pack('<4I', len(boxes), len(hulls), len(plane_list), len(triangles))
-    data = (header + np.array(boxes, np.float32).tobytes() + np.array(brush_index, np.uint32).tobytes()
+    header = b'LJC2' + struct.pack('<4I', len(boxes), len(hulls), len(plane_list), len(triangles))
+    data = (header + np.array([b[0] for b in boxes], np.float32).tobytes() + np.array(brush_index, np.uint32).tobytes()
             + np.array([h[1] for h in hulls], np.float32).tobytes() + np.array(plane_list, np.float32).tobytes()
-            + np.array(triangles, np.float32).tobytes())
+            + np.array(triangles, np.float32).tobytes() + bytes(b[-1] for b in boxes + hulls))
     write_gzip(path, data)
     return data
 

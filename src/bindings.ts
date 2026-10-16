@@ -116,14 +116,14 @@ export class Controls {
     copy.held = new Set(this.held); copy.blocked = new Set(this.blocked);
     return copy;
   }
-  snapshot(yaw: number): Input & { lj: boolean } {
+  snapshot(yaw: number, pitch = 0): Input & { lj: boolean } {
     const on = (a: Action) => this.active(a) || this.pulses.has(a);
     const lj = on('longJump'), left = on('left'), right = on('right');
     return { forward: Number(on('forward')) - Number(on('back')), side: Number(right) - Number(left),
-      overlap: left && right, jump: on('jump') || lj, jumpPressed: this.jumpPressed, duck: on('duck') || lj, walk: on('walk'), yaw, lj };
+      overlap: left && right, jump: on('jump') || lj, jumpPressed: this.jumpPressed, duck: on('duck') || lj, walk: on('walk'), yaw, pitch, lj };
   }
-  tick(yaw: number) {
-    const input = this.snapshot(yaw);
+  tick(yaw: number, pitch = 0) {
+    const input = this.snapshot(yaw, pitch);
     // CInput::KeyState fractions apply to movement axes, not IN_JUMP/IN_DUCK.
     const amount = (action: Action) => {
       const down = this.active(action), pressed = this.pressed.has(action), released = this.released.has(action);

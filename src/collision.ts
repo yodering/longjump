@@ -5,7 +5,11 @@
 // separating-axis planes (face, axes and edge x axis bevels), which is the hull's Minkowski sum with the triangle.
 // Results never depend on the order the grid returns primitives: the nearest hit wins, then the lowest primitive.
 export type Vec3 = { x: number; y: number; z: number };
-export type WorldHit = { fraction: number; normal: Vec3; startsolid: boolean; allsolid: boolean; id: string };
+export type WorldHit = { fraction: number; normal: Vec3; startsolid: boolean; allsolid: boolean; id: string; ladder: boolean };
+
+// Contents of each box and brush (collision.bin LJC2; LJC1 files are all SOLID). SOLID is MASK_PLAYERSOLID; LADDER is
+// CONTENTS_LADDER, which LadderMove looks for on what its MASK_PLAYERSOLID trace hits.
+export const SOLID = 1, LADDER = 2;
 
 // Engine DIST_EPSILON (also in physics.ts): traces stop this far short of a surface.
 const EPSILON = 0.03125;
@@ -17,12 +21,14 @@ export class CollisionWorld {
   private boxes: Float32Array; private brushes: Uint32Array; private brushBounds: Float32Array;
   private planes: Float32Array; private triangles: Float32Array; private triangleBounds: Float32Array;
   private cellStart: Int32Array; private cellItems: Int32Array; private columns: number; private rows: number;
+  private contents: Uint8Array;
   private stamp: Uint32Array; private tick = 0;
   private scratch = new Float64Array(26 * 4);
 
   constructor(buffer: ArrayBuffer) {
     const header = new DataView(buffer);
-    if (String.fromCharCode(...new Uint8Array(buffer, 0, 4)) !== 'LJC1') throw new Error('Unrecognised collision data');
+    const magic = String.fromCharCode(...new Uint8Array(buffer, 0, 4));
+    if (magic !== 'LJC1' && magic !== 'LJC2') throw new Error('Unrecognised collision data');
     const [boxes, brushes, planes, triangles] = [4, 8, 12, 16].map(o => header.getUint32(o, true));
     let offset = 20;
     const take = <T>(make: (o: number, n: number) => T, count: number, bytes: number) => { const value = make(offset, count); offset += count * bytes; return value; };
@@ -31,6 +37,7 @@ export class CollisionWorld {
     this.brushBounds = take((o, n) => new Float32Array(buffer, o, n), brushes * 6, 4);
     this.planes = take((o, n) => new Float32Array(buffer, o, n), planes * 4, 4);
     this.triangles = take((o, n) => new Float32Array(buffer, o, n), triangles * 9, 4);
+    this.contents = magic === 'LJC2' ? take((o, n) => new Uint8Array(buffer, o, n), boxes + brushes, 1) : new Uint8Array(boxes + brushes).fill(SOLID);
     this.triangleBounds = new Float32Array(triangles * 6);
     for (let t = 0; t < triangles; t++) for (let a = 0; a < 3; a++) {
       const v = [0, 1, 2].map(k => this.triangles[t * 9 + k * 3 + a]);
@@ -59,20 +66,22 @@ export class CollisionWorld {
     this.stamp = new Uint32Array(boxes + brushes + triangles);
   }
 
-  get counts() { return { boxes: this.boxes.length / 6, brushes: this.brushes.length / 2, triangles: this.triangles.length / 9 }; }
+  get counts() {
+    return { boxes: this.boxes.length / 6, brushes: this.brushes.length / 2, triangles: this.triangles.length / 9, ladders: this.contents.filter(c => c & LADDER).length };
+  }
 
   private cell(x: number, y: number): [number, number] {
     return [Math.min(this.columns - 1, Math.max(0, Math.floor((x - this.min.x) / CELL))), Math.min(this.rows - 1, Math.max(0, Math.floor((y - this.min.y) / CELL)))];
   }
 
-  /** Sweeps a hull with feet at `start` (x/y half-width `half`, `height` tall) to `end`. */
-  trace(start: Vec3, end: Vec3, half: number, height: number): WorldHit | null {
+  /** Sweeps a hull with feet at `start` (x/y half-width `half`, `height` tall) to `end`, against primitives in `mask`. */
+  trace(start: Vec3, end: Vec3, half: number, height: number, mask = SOLID): WorldHit | null {
     const lo = [Math.min(start.x, end.x) - half - 1, Math.min(start.y, end.y) - half - 1, Math.min(start.z, end.z) - 1];
     const hi = [Math.max(start.x, end.x) + half + 1, Math.max(start.y, end.y) + half + 1, Math.max(start.z, end.z) + height + 1];
     if (hi[0] < this.min.x || lo[0] > this.max.x || hi[1] < this.min.y || lo[1] > this.max.y || hi[2] < this.min.z || lo[2] > this.max.z) return null;
     const [x0, y0] = this.cell(lo[0], lo[1]), [x1, y1] = this.cell(hi[0], hi[1]);
     if (++this.tick === 0xffffffff) { this.stamp.fill(0); this.tick = 1; }
-    const best: WorldHit & { key: number } = { fraction: 1, normal: { x: 0, y: 0, z: 0 }, startsolid: false, allsolid: false, id: '', key: Infinity };
+    const best: WorldHit & { key: number } = { fraction: 1, normal: { x: 0, y: 0, z: 0 }, startsolid: false, allsolid: false, id: '', ladder: false, key: Infinity };
     const offsets = [0, this.boxes.length / 6, this.boxes.length / 6 + this.brushes.length / 2];
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
       const c = y * this.columns + x;
@@ -80,6 +89,7 @@ export class CollisionWorld {
         const item = this.cellItems[k], type = item >>> 28, index = item & 0xfffffff, key = offsets[type] + index;
         if (this.stamp[key] === this.tick) continue;
         this.stamp[key] = this.tick;
+        if (type !== TRIANGLE && !(this.contents[key] & mask)) continue;
         const bounds = type === BOX ? this.boxes : type === BRUSH ? this.brushBounds : this.triangleBounds;
         const o = index * 6;
         if (bounds[o] > hi[0] || bounds[o + 3] < lo[0] || bounds[o + 1] > hi[1] || bounds[o + 4] < lo[1] || bounds[o + 2] > hi[2] || bounds[o + 5] < lo[2]) continue;
@@ -89,7 +99,8 @@ export class CollisionWorld {
       }
     }
     if (best.key === Infinity && !best.startsolid) return null;
-    return { fraction: best.fraction, normal: best.normal, startsolid: best.startsolid, allsolid: best.allsolid, id: best.id };
+    const ladder = best.key < this.contents.length && !!(this.contents[best.key] & LADDER);
+    return { fraction: best.fraction, normal: best.normal, startsolid: best.startsolid, allsolid: best.allsolid, id: best.id, ladder };
   }
 
   // The same Minkowski slab test physics.ts uses for map boxes (IntersectRayWithBoxBrush's contact plane choice).

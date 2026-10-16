@@ -6,12 +6,17 @@ export const RULES = { gravity: 800, jumpImpulse: 301.993377, maxSpeed: 250, acc
   friction: 5.2, stopSpeed: 80, hull: 16, height: 72, duckHeight: 54, viewHeight: 64, duckViewHeight: 46, stepSize: 18,
   nonJumpVelocity: 140, duckModifier: 0.34, walkModifier: 0.52, duckSpeedIdeal: 8, moveSpeed: 450, maxVelocity: 3500,
   staminaJumpCost: 0.08, staminaLandCost: 0.05, staminaRecovery: 60, staminaMax: 80, staminaRange: 100,
-  timeBetweenDucks: 0.4, viewPunchDecay: 18, fatalFallSpeed: 1024 };
+  timeBetweenDucks: 0.4, viewPunchDecay: 18, fatalFallSpeed: 1024,
+  // Ladders (SDK 2013 gamemovement.cpp): MAX_CLIMB_SPEED, LadderDistance, the 270 u/s jump off, and the CS-only
+  // sv_ladder_dampen / sv_ladder_angle. ladderScale is CS:GO's sv_ladder_scale_speed default, applied to ClimbSpeed;
+  // where CS:GO applies it is not public, so climbing speed awaits a recorded trace.
+  climbSpeed: 200, ladderScale: 0.78, ladderDistance: 2, ladderJump: 270, ladderDampen: 0.2, ladderAngle: -0.707 };
 // Traces stop this far short of a surface (engine DIST_EPSILON), so a standing origin rests 1/32 above the floor.
 export const DIST_EPSILON = 0.03125;
 export type Vec = { x: number; y: number; z: number };
 export type Box = { min: Vec; max: Vec; id: string };
-export type Input = { forward: number; side: number; jump: boolean; duck: boolean; walk: boolean; yaw: number; overlap?: boolean; jumpPressed?: boolean };
+// pitch is radians, positive looking up; only ladders read it (absent means level).
+export type Input = { forward: number; side: number; jump: boolean; duck: boolean; walk: boolean; yaw: number; pitch?: number; overlap?: boolean; jumpPressed?: boolean };
 export type Strafe = { direction: number; ticks: number; synced: number; gain: number; loss: number; maxSpeed: number; width: number };
 export type Jump = { start: Vec; preSpeed: number; maxSpeed: number; ticks: number; synced: number; overlap: number; deadAir: number;
   height: number; lastYaw: number; strafes: Strafe[]; path: Vec[]; startPlatform: string; edge: number | null; ducked: boolean; valid: boolean };
@@ -20,11 +25,16 @@ export type Result = { distance: number; preSpeed: number; maxSpeed: number; syn
   path: Vec[]; landed: boolean; valid: boolean; reason: string; ducked: boolean };
 // The surface a trace stopped on: a map box (z is its top) or, on whole maps, any collision primitive (z is the floor under the stop).
 export type Ground = { id: string; z: number };
-type Trace = { fraction: number; end: Vec; normal: Vec; startsolid: boolean; allsolid: boolean; box?: Box; ground?: Ground };
+type Trace = { fraction: number; end: Vec; normal: Vec; startsolid: boolean; allsolid: boolean; box?: Box; ground?: Ground; ladder?: boolean };
 export const speed = (v: Vec) => Math.hypot(v.x, v.y);
 export const clone = (v: Vec): Vec => ({ ...v });
 const dot = (a: Vec, b: Vec) => a.x * b.x + a.y * b.y + a.z * b.z;
 const length = (v: Vec) => Math.hypot(v.x, v.y, v.z);
+const cross = (a: Vec, b: Vec): Vec => ({ x: a.y * b.z - a.z * b.y, y: a.z * b.x - a.x * b.z, z: a.x * b.y - a.y * b.x });
+const scale = (v: Vec, s: number): Vec => ({ x: v.x * s, y: v.y * s, z: v.z * s });
+const add = (a: Vec, b: Vec): Vec => ({ x: a.x + b.x, y: a.y + b.y, z: a.z + b.z });
+// VectorNormalize: a zero vector stays zero.
+const normalize = (v: Vec) => { const l = length(v); return l ? scale(v, 1 / l) : { x: 0, y: 0, z: 0 }; };
 const assign = (to: Vec, from: Vec) => { to.x = from.x; to.y = from.y; to.z = from.z; };
 const approach = (target: number, value: number, delta: number) => value < target ? Math.min(target, value + delta) : Math.max(target, value - delta);
 const simpleSpline = (x: number) => 3 * x * x - 2 * x * x * x;
@@ -63,6 +73,8 @@ export class Movement {
   autoBhop = false;
   // m_surfaceFriction: CategorizePosition sets 0.25 while airborne and rising (the "deadstrafe"); AirAccelerate reads it.
   surfaceFriction = 1;
+  // MOVETYPE_LADDER while set: m_vecLadderNormal, the face of the ladder being climbed.
+  ladderNormal: Vec | null = null;
   viewOffset = RULES.viewHeight; viewPunch = 0;
   previousPosition: Vec = clone(this.position); previousViewOffset = RULES.viewHeight;
   platform = 'start-2'; jump: Jump | null = null; result: Result | null = null;
@@ -74,14 +86,14 @@ export class Movement {
   private time = 0; private lastDuckTime = -Infinity; private rawDuck = false; private crouchSpot = { x: 0, y: 0 };
   private maxSpeed = RULES.maxSpeed; private fmove = 0; private smove = 0; private walkButton = false; private duckButton = false;
   private moveStart: Vec = clone(this.position); private moveVelocity: Vec = clone(this.velocity);
-  private airMoved = false;
+  private airMoved = false; private leftLadder = false;
   constructor(gap = 246) { this.boxes = createMap(gap); }
   get dt() { return 1 / this.tickRate; }
   get hullHeight() { return this.ducked ? RULES.duckHeight : RULES.height; }
   reset(position: Vec = { x: 0, y: -240, z: 0 }) {
     this.position = clone(position); this.velocity = { x: 0, y: 0, z: 0 };
     this.grounded = !!this.support(); this.ducked = this.ducking = this.duckFlag = false; this.duckAmount = 0; this.duckSpeed = RULES.duckSpeedIdeal;
-    this.stamina = 0; this.jump = null; this.jumpHeld = false; this.fallVelocity = 0; this.surfaceFriction = 1;
+    this.stamina = 0; this.jump = null; this.jumpHeld = false; this.fallVelocity = 0; this.surfaceFriction = 1; this.ladderNormal = null;
     this.viewOffset = this.previousViewOffset = RULES.viewHeight; this.viewPunch = 0; this.previousPosition = clone(position);
     this.lastDuckTime = -Infinity; this.rawDuck = false; this.crouchSpot = { x: position.x, y: position.y };
     this.platform = this.support()?.id ?? ''; this.result = null;
@@ -93,7 +105,8 @@ export class Movement {
     const box = this.boxes.find(b => p.x + h > b.min.x && p.x - h < b.max.x && p.y + h > b.min.y && p.y - h < b.max.y && p.z >= b.max.z - 1e-4 && p.z - b.max.z <= 2);
     if (box || !this.world) return box && { id: box.id, z: box.max.z };
     const tr = this.trace(p, { ...p, z: p.z - 2 });
-    return tr.ground && tr.fraction < 1 && !tr.startsolid && tr.normal.z >= 0.7 ? tr.ground : undefined;
+    if (tr.startsolid) return undefined;
+    return tr.ground && tr.fraction < 1 && tr.normal.z >= 0.7 ? tr.ground : this.groundInQuadrants(p, p.z - 2);
   }
   overlaps(p: Vec, height: number) { return this.trace(p, p, height).startsolid; }
   // Eye position between the last two ticks, as the client renders the predicted player.
@@ -152,32 +165,34 @@ export class Movement {
       const hit = Math.max(0, enter);
       if (hit < fraction) { fraction = hit; box = b; normal = { x: 0, y: 0, z: 0 }; normal[axis] = sign; }
     }
-    let ground = box && { id: box.id, z: box.max.z };
+    let ground = box && { id: box.id, z: box.max.z }, ladder = false;
     // Whole maps: the nearer of the box hit and the world hit (boxes win ties).
     const world = this.world?.trace(start, end, RULES.hull, height);
     if (world) {
       startsolid ||= world.startsolid; allsolid ||= world.allsolid;
       if (world.fraction < fraction) {
-        fraction = world.fraction; normal = world.normal; box = undefined;
+        fraction = world.fraction; normal = world.normal; box = undefined; ladder = world.ladder;
         ground = { id: world.id, z: start.z + d.z * fraction - DIST_EPSILON };
       }
     }
-    return { fraction, end: { x: start.x + d.x * fraction, y: start.y + d.y * fraction, z: start.z + d.z * fraction }, normal, startsolid, allsolid, box, ground };
+    return { fraction, end: { x: start.x + d.x * fraction, y: start.y + d.y * fraction, z: start.z + d.z * fraction }, normal, startsolid, allsolid, box, ground, ladder };
   }
   step(input: Input) {
     const dt = this.dt, p = this.position, v = this.velocity;
     this.previousPosition = clone(p); this.previousViewOffset = this.viewOffset; this.time += dt;
-    this.airMoved = false;
+    this.airMoved = false; this.leftLadder = false;
     this.yaw = input.yaw;
     this.moveStart = clone(p); this.moveVelocity = clone(v);
     this.checkParameters(input);
     // ReduceTimers
     this.stamina = Math.max(0, this.stamina - dt * RULES.staminaRecovery);
-    // PlayerMove (sv_optimizedmovement 1: no CategorizePosition here)
-    if (v.z > 250) this.setGround(undefined);
+    // PlayerMove: CategorizePosition only off MOVETYPE_WALK (sv_optimizedmovement 1), else just the 250 u/s check.
+    if (this.ladderNormal) this.categorizePosition();
+    else if (v.z > 250) this.setGround(undefined);
     if (!this.grounded) this.fallVelocity = -v.z;
     this.duck();
-    this.fullWalkMove(input);
+    if (!this.ladderMove(input)) this.ladderNormal = null;
+    if (this.ladderNormal) this.fullLadderMove(); else this.fullWalkMove(input);
     if (this.jump) {
       const j = this.jump;
       j.path.push(clone(p)); j.height = Math.max(j.height, p.z - j.start.z);
@@ -291,7 +306,50 @@ export class Movement {
     this.jumpHeld = true;
     const block = this.boxes.find(b => b.id === this.platform);
     this.jump = { start: clone(p), preSpeed: speed(v), maxSpeed: speed(v), ticks: 0, synced: 0, overlap: 0, deadAir: 0, height: 0,
-      lastYaw: input.yaw, strafes: [], path: [clone(p)], startPlatform: this.platform, edge: takeoffEdge(block, p, v), ducked: this.ducked, valid: true };
+      lastYaw: input.yaw, strafes: [], path: [clone(p)], startPlatform: this.platform, edge: takeoffEdge(block, p, v), ducked: this.ducked, valid: !this.leftLadder };
+  }
+  // CGameMovement::LadderMove (SDK 2013, with its CSTRIKE_DLL dampening). True while the player is on a ladder; a jump
+  // leaves it with 270 u/s off the face and returns true, so that command walks (and can still ground-jump).
+  private ladderMove(input: Input) {
+    if (!this.world) return false;  // only whole maps carry CONTENTS_LADDER
+    const p = this.position, pitch = input.pitch ?? 0;
+    const forward = { x: Math.sin(this.yaw) * Math.cos(pitch), y: Math.cos(this.yaw) * Math.cos(pitch), z: Math.sin(pitch) };
+    const right = { x: Math.cos(this.yaw), y: -Math.sin(this.yaw), z: 0 };
+    let wishdir: Vec;
+    if (this.ladderNormal) wishdir = scale(this.ladderNormal, -1);
+    else if (this.fmove || this.smove) wishdir = normalize(add(scale(forward, this.fmove), scale(right, this.smove)));
+    else return false;
+    const pm = this.trace(p, add(p, scale(wishdir, RULES.ladderDistance)));
+    if (pm.fraction === 1 || !pm.ladder) return false;
+    const n = clone(pm.normal), v = this.velocity;
+    this.ladderNormal = n;
+    if (this.jump) this.jump.valid = false;
+    // GetPointContents one unit under the feet, or a ground entity.
+    const floor = { ...p, z: p.z - 1 };
+    const onFloor = this.grounded || !!this.world.trace(floor, floor, 0, 0)?.startsolid;
+    if (input.jump) { this.ladderNormal = null; this.leftLadder = true; assign(v, scale(n, RULES.ladderJump)); return true; }
+    const climb = RULES.climbSpeed * RULES.ladderScale;
+    const forwardSpeed = (input.forward > 0 ? climb : 0) - (input.forward < 0 ? climb : 0);
+    const rightSpeed = (input.side > 0 ? climb : 0) - (input.side < 0 ? climb : 0);
+    if (!forwardSpeed && !rightSpeed) { v.x = v.y = v.z = 0; return true; }
+    const velocity = add(scale(forward, forwardSpeed), scale(right, rightSpeed));
+    const perp = normalize(cross({ x: 0, y: 0, z: 1 }, n));
+    const normal = dot(velocity, n), into = scale(n, normal);
+    let lateral = add(velocity, scale(into, -1));
+    const tmp = cross(n, perp);
+    // CS: steep approaches to the ladder damp sideways movement along it.
+    const tmpDist = dot(tmp, lateral), perpDist = dot(perp, lateral);
+    if (dot(normalize(add(scale(perp, perpDist), into)), n) < RULES.ladderAngle)
+      lateral = add(scale(tmp, tmpDist), scale(perp, RULES.ladderDampen * perpDist));
+    let next = add(lateral, scale(tmp, -normal));
+    if (onFloor && normal > 0) next = add(next, scale(n, RULES.climbSpeed));  // on the ground moving away from the ladder
+    assign(v, next);
+    return true;
+  }
+  // FullLadderMove: no gravity or friction. LadderMove has already handled IN_JUMP, so the jump button is released.
+  private fullLadderMove() {
+    this.jumpHeld = false;
+    this.tryPlayerMove();
   }
   private friction() {
     const v = this.velocity, sp = length(v);
@@ -400,7 +458,7 @@ export class Movement {
       timeLeft -= timeLeft * pm.fraction;
       if (planes.length >= 5) { stop(); break; }
       planes.push(normal);
-      if (planes.length === 1 && !this.grounded) {
+      if (planes.length === 1 && !this.grounded && !this.ladderNormal) {
         const next = { x: 0, y: 0, z: 0 };
         this.clipVelocity(original, planes[0], next, 1);
         assign(v, next); original = clone(next);
@@ -449,15 +507,30 @@ export class Movement {
     this.surfaceFriction = 1;
     let point = p.z - 2, moveToEnd = false;
     if (this.grounded) { moveToEnd = true; point -= RULES.stepSize; }
-    if (v.z > RULES.nonJumpVelocity) { this.setGround(undefined); return; }
+    // Moving up rapidly, or up a ladder, is never on ground.
+    if (v.z > RULES.nonJumpVelocity || (v.z > 0 && this.ladderNormal)) { this.setGround(undefined); return; }
     const tr = this.trace(p, { ...p, z: point });
-    if (!tr.ground || tr.fraction >= 1 || tr.normal.z < 0.7) {
+    const ground = tr.ground && tr.fraction < 1 && tr.normal.z >= 0.7 ? tr.ground : this.groundInQuadrants(p, point);
+    if (!ground) {
       this.setGround(undefined);
       if (v.z > 0) this.surfaceFriction = 0.25;
       return;
     }
-    this.setGround(tr.ground);
+    this.setGround(ground);
     if (moveToEnd && !tr.startsolid && tr.fraction > 0 && tr.fraction < 1) assign(p, tr.end);
+  }
+  // TryTouchGroundInQuadrants (SDK 2013): when the whole hull finds no floor, each quarter of it tries, so a steep
+  // face touched by one side does not hide the floor under the other. The caller keeps the full trace's end, so the
+  // player is never moved down onto that floor. Map boxes are axial, so only whole maps need this.
+  private groundInQuadrants(p: Vec, z: number): Ground | undefined {
+    if (!this.world) return undefined;
+    const q = RULES.hull / 2;
+    for (const [sx, sy] of [[-1, -1], [1, 1], [-1, 1], [1, -1]]) {
+      const start = { x: p.x + sx * q, y: p.y + sy * q, z: p.z };
+      const hit = this.world.trace(start, { ...start, z }, q, this.hullHeight);
+      if (hit && hit.fraction < 1 && hit.normal.z >= 0.7) return { id: hit.id, z: p.z + (z - p.z) * hit.fraction - DIST_EPSILON };
+    }
+    return undefined;
   }
   private setGround(ground: Ground | undefined) {
     if (!ground) { this.grounded = false; return; }
@@ -506,11 +579,12 @@ export class Movement {
       stamina: this.stamina, jumpHeld: this.jumpHeld, fallVelocity: this.fallVelocity, surfaceFriction: this.surfaceFriction,
       viewOffset: this.viewOffset, viewPunch: this.viewPunch, platform: this.platform, time: this.time,
       lastDuckTime: Number.isFinite(this.lastDuckTime) ? this.lastDuckTime : null, rawDuck: this.rawDuck,
-      crouchSpot: { ...this.crouchSpot }, walkButton: this.walkButton, duckButton: this.duckButton };
+      crouchSpot: { ...this.crouchSpot }, walkButton: this.walkButton, duckButton: this.duckButton,
+      ladderNormal: this.ladderNormal && clone(this.ladderNormal) };
   }
   restore(state: MovementState) {
     Object.assign(this, { ...state, position: clone(state.position), velocity: clone(state.velocity), crouchSpot: { ...state.crouchSpot },
-      lastDuckTime: state.lastDuckTime ?? -Infinity, previousPosition: clone(state.position), previousViewOffset: state.viewOffset,
+      lastDuckTime: state.lastDuckTime ?? -Infinity, ladderNormal: state.ladderNormal ? clone(state.ladderNormal) : null, previousPosition: clone(state.position), previousViewOffset: state.viewOffset,
       moveStart: clone(state.position), moveVelocity: clone(state.velocity), airMoved: false, maxSpeed: RULES.maxSpeed,
       jump: null, result: null });
   }
@@ -518,4 +592,4 @@ export class Movement {
 export type MovementState = { position: Vec; velocity: Vec; grounded: boolean; ducked: boolean; ducking: boolean; duckFlag: boolean;
   duckAmount: number; duckSpeed: number; stamina: number; jumpHeld: boolean; fallVelocity: number; surfaceFriction: number;
   viewOffset: number; viewPunch: number; platform: string; time: number; lastDuckTime: number | null; rawDuck: boolean;
-  crouchSpot: { x: number; y: number }; walkButton: boolean; duckButton: boolean };
+  crouchSpot: { x: number; y: number }; walkButton: boolean; duckButton: boolean; ladderNormal?: Vec | null };

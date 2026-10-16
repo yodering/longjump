@@ -1,7 +1,7 @@
 import { Controls, type Bindings } from './bindings.ts';
 
 type CommandEvent = { at: number } & (
-  { kind: 'down' | 'up' | 'pulse'; token: string } | { kind: 'look'; yaw: number }
+  { kind: 'down' | 'up' | 'pulse'; token: string } | { kind: 'look'; yaw: number; pitch: number }
 );
 export type UserCommand = ReturnType<Controls['tick']>;
 
@@ -13,15 +13,17 @@ export class Commands {
   private events: CommandEvent[] = [];
   private time = 0;
   private yaw = 0;
+  private pitch = 0;
   private liveYaw = 0;
+  private livePitch = 0;
   private revision = 0;
   alpha = 0;
 
   constructor(bindings: Bindings) {
     this.live = new Controls(bindings); this.simulated = this.live.fork();
   }
-  reset(now: number, yaw: number) {
-    this.time = now; this.yaw = this.liveYaw = yaw; this.alpha = 0;
+  reset(now: number, yaw: number, pitch: number) {
+    this.time = now; this.yaw = this.liveYaw = yaw; this.pitch = this.livePitch = pitch; this.alpha = 0;
     this.events = []; this.live.clearPulses(); this.simulated = this.live.fork(); this.revision++;
   }
   button(kind: 'down' | 'up' | 'pulse', token: string, at: number) {
@@ -29,8 +31,8 @@ export class Commands {
     this.enqueue({ kind, token, at });
     return action;
   }
-  look(yaw: number, at: number) {
-    this.liveYaw = yaw; this.enqueue({ kind: 'look', yaw, at });
+  look(yaw: number, pitch: number, at: number) {
+    this.liveYaw = yaw; this.livePitch = pitch; this.enqueue({ kind: 'look', yaw, pitch, at });
   }
   private enqueue(event: CommandEvent) {
     // Late/coalesced browser events are consumed on the next command, never rewound.
@@ -41,29 +43,29 @@ export class Commands {
   // Rendering may respond before a complete fixed physics interval has elapsed.
   preview(now: number): UserCommand {
     const controls = this.simulated.fork();
-    let yaw = this.yaw;
+    let yaw = this.yaw, pitch = this.pitch;
     for (const event of this.events) {
       if (event.at > now) break;
-      if (event.kind === 'look') yaw = event.yaw;
+      if (event.kind === 'look') { yaw = event.yaw; pitch = event.pitch; }
       else controls[event.kind](event.token);
     }
-    return controls.tick(yaw);
+    return controls.tick(yaw, pitch);
   }
   advance(now: number, tickRate: 64 | 128, step: (input: UserCommand) => void) {
     const interval = 1000 / tickRate, revision = this.revision;
     // Treat long main-thread suspensions as a pause, without replaying stale jumps.
     // Ordinary slow frames (up to 250 ms) retain every physics tick.
-    if (now - this.time > 250) { this.reset(now, this.liveYaw); return; }
+    if (now - this.time > 250) { this.reset(now, this.liveYaw, this.livePitch); return; }
     while (this.time + interval <= now) {
       this.time += interval;
       let consumed = 0;
       while (consumed < this.events.length && this.events[consumed].at <= this.time) {
         const event = this.events[consumed++];
-        if (event.kind === 'look') this.yaw = event.yaw;
+        if (event.kind === 'look') { this.yaw = event.yaw; this.pitch = event.pitch; }
         else this.simulated[event.kind](event.token);
       }
       this.events.splice(0, consumed);
-      step(this.simulated.tick(this.yaw));
+      step(this.simulated.tick(this.yaw, this.pitch));
       // Respawning inside step establishes a new clock and command queue.
       if (revision !== this.revision) return;
     }
