@@ -72,3 +72,27 @@ test('The leaderboard reruns a whole-map jump to the identical result', () => {
   assert.equal(onWorld.valid, true);
   assert.ok(Math.abs(onWorld.distance - onBoxes.distance) < 1e-6);
 });
+
+test('At the foot of a steep slope, a quarter of the hull still finds the floor (TryTouchGroundInQuadrants)', () => {
+  // A 63° wedge rising from x = 20 (its face's normal z is 0.45), on a displacement floor. Brushes come before
+  // triangles, so where the hull touches both, the full ground trace reports the steep face.
+  const k = Math.sqrt(5);
+  const wedge: Plane[] = [[-2 / k, 0, 1 / k, -40 / k], [0, 0, -1, 100], [1, 0, 0, 200], [0, 1, 0, 500], [0, -1, 0, 500], [0, 0, 1, 360]];
+  const m = new Movement(); m.boxes = []; m.world = world([], [wedge], tiles); m.reset({ x: 0, y: 0, z: DIST_EPSILON });
+  m.reset(m.trace(m.position, { x: 40, y: 0, z: DIST_EPSILON }).end);
+  const start = { ...m.position };
+  assert.ok(start.x > 3 && start.x < 4, `touching the wedge at x = ${start.x}`);
+  const full = m.trace(start, { ...start, z: start.z - 2 });
+  assert.ok(full.normal.z < 0.7, 'the full hull reports the steep face');
+  for (let t = 0; t < 128; t++) { m.step(idle); assert.ok(m.grounded, `grounded on tick ${t}`); }
+  assert.deepEqual(m.position, start);
+});
+
+test('A takeoff at the foot of a steep slope counts as solid ground for the leaderboard', () => {
+  const k = Math.sqrt(5);
+  const wedge: Plane[] = [[-2 / k, 0, 1 / k, -40 / k], [0, 0, -1, 100], [1, 0, 0, 200], [0, 1, 0, 500], [0, -1, 0, 500], [0, 0, 1, 360]];
+  const w = world([], [wedge], tiles), m = new Movement(); m.boxes = []; m.world = w; m.reset({ x: 0, y: 0, z: DIST_EPSILON });
+  m.reset(m.trace(m.position, { x: 40, y: 0, z: DIST_EPSILON }).end);
+  const support = m.support();
+  assert.ok(support && Math.abs(m.position.z - (support.z + DIST_EPSILON)) < 1e-6, `support at ${support?.z}`);
+});

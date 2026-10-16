@@ -20,6 +20,7 @@ const between = (value: unknown, min: number, max: number) => finite(value) && v
 /** Keeps only the fields physics reads, so recordings stay small and well-typed. */
 export function recordInput(input: Input): Input {
   const copy: Input = { forward: input.forward, side: input.side, jump: input.jump, duck: input.duck, walk: input.walk, yaw: input.yaw };
+  if (input.pitch !== undefined) copy.pitch = input.pitch;
   if (input.overlap !== undefined) copy.overlap = input.overlap;
   if (input.jumpPressed !== undefined) copy.jumpPressed = input.jumpPressed;
   return copy;
@@ -36,14 +37,15 @@ export function parseReplay(value: unknown): Replay {
     || !between(s.duckAmount, 0, 1) || !between(s.duckSpeed, 0, RULES.duckSpeedIdeal) || !between(s.stamina, 0, RULES.staminaMax)
     || !between(s.fallVelocity, -RULES.maxVelocity, RULES.maxVelocity) || !finite(s.surfaceFriction) || !finite(s.viewOffset) || !finite(s.viewPunch)
     || typeof s.platform !== 'string' || s.platform.length > 128 || !between(s.time, 0, 1e9)
-    || (s.lastDuckTime !== null && !between(s.lastDuckTime, 0, s.time)))
+    || (s.lastDuckTime !== null && !between(s.lastDuckTime, 0, s.time)) || (s.ladderNormal != null && !vec(s.ladderNormal)))
     throw new Error('Invalid takeoff state.');
   if (!Array.isArray(r.inputs) || !r.inputs.length || r.inputs.length > r.tickRate * MAX_REPLAY_SECONDS) throw new Error('Invalid replay length.');
   for (const i of r.inputs) if (!i || typeof i !== 'object' || !axis(i.forward) || !axis(i.side) || !finite(i.yaw)
-    || ![i.jump, i.duck, i.walk].every(bool) || (i.overlap !== undefined && !bool(i.overlap)) || (i.jumpPressed !== undefined && !bool(i.jumpPressed)))
+    || ![i.jump, i.duck, i.walk].every(bool) || (i.pitch !== undefined && !between(i.pitch, -Math.PI / 2, Math.PI / 2)) || (i.overlap !== undefined && !bool(i.overlap)) || (i.jumpPressed !== undefined && !bool(i.jumpPressed)))
     throw new Error('Invalid replay input.');
   return { version: 1, tickRate: r.tickRate, mapId: r.mapId, mapContentVersion: r.mapContentVersion, physicsVersion: r.physicsVersion,
-    state: { ...s, position: { ...s.position }, velocity: { ...s.velocity }, crouchSpot: { x: s.crouchSpot.x, y: s.crouchSpot.y } },
+    state: { ...s, position: { ...s.position }, velocity: { ...s.velocity }, crouchSpot: { x: s.crouchSpot.x, y: s.crouchSpot.y },
+      ladderNormal: s.ladderNormal ? { ...s.ladderNormal } : null },
     inputs: r.inputs.map(recordInput) };
 }
 
@@ -57,7 +59,7 @@ export function verifyReplay(replay: Replay, boxes: Box[], world: CollisionWorld
   m.restore(replay.state);
   const s = replay.state, support = m.support();
   // Ground states never carry vertical speed or the airborne deadstrafe friction.
-  if (!s.grounded || !support || s.velocity.z !== 0 || s.surfaceFriction !== 1
+  if (!s.grounded || s.ladderNormal || !support || s.velocity.z !== 0 || s.surfaceFriction !== 1
     || Math.abs(s.position.z - (support.z + DIST_EPSILON)) > 1e-3 || Math.hypot(s.velocity.x, s.velocity.y) > RULES.maxVelocity)
     throw new Error('The jump must start from solid ground.');
   if (m.overlaps(s.position, m.hullHeight)) throw new Error('The jump starts inside the map.');

@@ -161,7 +161,7 @@ function applyPreferences() {
   document.documentElement.dataset.mode = settings.appearance;
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', getComputedStyle(document.documentElement).getPropertyValue('--neutral-1').trim());
   if (plotPath.length) drawPath(plotPath, plotLanded);
-  controls.bindings = settings.bindings; controls.nullBind = settings.nullBind; controls.clear(); commands.reset(performance.now(), yaw);
+  controls.bindings = settings.bindings; controls.nullBind = settings.nullBind; controls.clear(); commands.reset(performance.now(), yaw, pitch);
   remote.group.visible = settings.showPlayers; roomPanel?.render();
   world.configureDisplay(settings); world.viewmodel.configure(settings.view);
   if (world.viewmodel.team !== settings.team) void world.viewmodel.setTeam(settings.team);
@@ -245,7 +245,7 @@ function clearResult() {
 }
 function reset(toEntry = false) {
   const pose = !toEntry && checkpoint ? checkpoint : mapEntry(classic);
-  movement.reset(pose.position); yaw = pose.yaw; pitch = pose.pitch; commands.reset(performance.now(), yaw); fallTime = 0;
+  movement.reset(pose.position); yaw = pose.yaw; pitch = pose.pitch; commands.reset(performance.now(), yaw, pitch); fallTime = 0;
   world.viewmodel.resetMotion();
   if (toEntry) world.viewmodel.play('draw');
   controls.clearPulses(); jumpUsedLJ = false; jumpBlock = 0;
@@ -343,7 +343,7 @@ function setLocked(value: boolean) {
   if (value || document.hasFocus()) playGuard.setPlaying(value, !!document.fullscreenElement);
   else void playGuard.capture(false);
   engagement.setPlaying(value && !document.hidden);
-  locked = value; controls.clear(); settingsPanel.cancelCapture(); lastTime = performance.now(); commands.reset(lastTime, yaw); movement.jumpHeld = false;
+  locked = value; controls.clear(); settingsPanel.cancelCapture(); lastTime = performance.now(); commands.reset(lastTime, yaw, pitch); movement.jumpHeld = false;
   $('menu').hidden = value; $('hud').hidden = !value; layoutHud(); previewHud();
   if (value) $<HTMLDetailsElement>('jump-details').open = false;
   document.body.classList.toggle('playing', value);
@@ -393,13 +393,13 @@ document.addEventListener('pointerlockerror', lockFailed);
 document.addEventListener('mousemove', event => { if (locked && !spectating) {
   yaw += event.movementX * settings.sensitivity * settings.mouseYaw * Math.PI / 180;
   pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, pitch - event.movementY * settings.sensitivity * settings.mousePitch * (settings.invertY ? -1 : 1) * Math.PI / 180));
-  commands.look(yaw, event.timeStamp);
+  commands.look(yaw, pitch, event.timeStamp);
 } });
 const bindLabel = (action: Action) => settings.bindings[action][0] ? tokenLabel(settings.bindings[action][0]) : '—';
 function spectate(id: string | null) {
   spectating = id; remote.spectating = id;
   // Movement stays paused where it was and resumes from there; queued input is dropped either way.
-  controls.clear(); lastTime = performance.now(); commands.reset(lastTime, yaw); movement.jumpHeld = false;
+  controls.clear(); lastTime = performance.now(); commands.reset(lastTime, yaw, pitch); movement.jumpHeld = false;
   const name = id ? room.players.get(id) ?? '' : '';
   $('spectate-banner').hidden = !id;
   $('spectate-banner').innerHTML = id ? `Spectating <b>${escapeHtml(name)}</b><kbd>${escapeHtml(bindLabel('light'))}</kbd>Next<kbd>${escapeHtml(bindLabel('heavy'))}</kbd>Previous<kbd>${escapeHtml(bindLabel('spectate'))}</kbd>Stop` : '';
@@ -468,7 +468,7 @@ document.addEventListener('wheel', event => {
   if (settingsPanel.captureToken(token)) { event.preventDefault(); return; }
   if (locked) { event.preventDefault(); runAction(commands.button('pulse', token, event.timeStamp)); }
 }, { passive: false });
-addEventListener('blur', () => { controls.clear(); commands.reset(performance.now(), yaw); settingsPanel.cancelCapture(); if (locked) document.exitPointerLock(); });
+addEventListener('blur', () => { controls.clear(); commands.reset(performance.now(), yaw, pitch); settingsPanel.cancelCapture(); if (locked) document.exitPointerLock(); });
 addEventListener('focus', () => { if (!locked) playGuard.setPlaying(false, false); });
 const fullscreenOffer = () => {
   const button = $('start-fullscreen'), full = !!document.fullscreenElement;
@@ -478,7 +478,7 @@ const fullscreenOffer = () => {
 };
 fullscreenOffer();
 document.addEventListener('fullscreenchange', () => { fullscreenOffer(); void playGuard.capture(locked && !!document.fullscreenElement); });
-document.addEventListener('visibilitychange', () => { engagement.setPlaying(locked && !document.hidden); if (document.hidden) { controls.clear(); if (locked) document.exitPointerLock(); } lastTime = performance.now(); commands.reset(lastTime, yaw); });
+document.addEventListener('visibilitychange', () => { engagement.setPlaying(locked && !document.hidden); if (document.hidden) { controls.clear(); if (locked) document.exitPointerLock(); } lastTime = performance.now(); commands.reset(lastTime, yaw, pitch); });
 $('stats-toggle').addEventListener('click', toggleStatsPanel);
 $('menu-hint-close').addEventListener('click', () => { settings.hud.menuHint = false; applyPreferences(); settingsPanel.render(); });
 document.querySelectorAll<HTMLButtonElement>('[data-map]').forEach(button => button.addEventListener('click', () => void changeMap(button.dataset.map as MapId)));
@@ -546,7 +546,7 @@ function frame(_frameTimestamp: number) {
   }
   const target = spectating ? remote.view(spectating) : null;
   if (spectating) {
-    commands.reset(now, yaw);
+    commands.reset(now, yaw, pitch);
     // Until the watched player's first pose arrives, the paused local view stays up.
     if (target) world.play(target.eye, target.yaw, target.pitch, dt, { punch: 0, speed: speed(target.velocity), grounded: target.grounded, show: false, leftHand: settings.leftHand });
     else world.play(movement.eye(1), yaw, pitch, dt, view());

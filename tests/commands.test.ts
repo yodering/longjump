@@ -15,7 +15,7 @@ for (const tickRate of [64, 128] as const) {
         m.boxes = [{ id: 'floor', min: { x: -2000, y: -2000, z: -100 }, max: { x: 2000, y: 2000, z: 0 } }];
         m.reset({ x: 0, y: 0, z: 1 }); m.grounded = false;
         m.velocity = { x: 0, y: 270, z: -100 };
-        const c = new Commands(normalizeBindings(null)); c.reset(0, 0);
+        const c = new Commands(normalizeBindings(null)); c.reset(0, 0, 0);
         for (let at = (sample + 0.5) / samples * gap; at < interval * 2; at += gap) {
           c.button('pulse', 'WheelDown', at);
         }
@@ -42,7 +42,7 @@ for (const tickRate of [64, 128] as const) {
       const m = new Movement(); m.tickRate = tickRate;
       m.reset({ x: 0, y: -240, z: 1 }); m.grounded = false;
       m.velocity = { x: 0, y: 270, z: -100 };
-      const c = new Commands(normalizeBindings(null)); c.reset(0, 0);
+      const c = new Commands(normalizeBindings(null)); c.reset(0, 0, 0);
       const interval = 1000 / tickRate;
       c.button('pulse', 'WheelDown', (jumpTick - 0.5) * interval);
       c.advance(interval * 3, tickRate, input => m.step(input));
@@ -75,9 +75,9 @@ test('Alternate movement bindings do not introduce false releases', () => {
 });
 
 test('Catch-up ticks receive only the buttons and yaw available at their timestamp', () => {
-  const c = new Commands(normalizeBindings(null)); c.reset(0, 0);
-  c.button('down', 'KeyD', 17); c.look(0.1, 18);
-  c.button('pulse', 'WheelDown', 27); c.look(0.2, 29);
+  const c = new Commands(normalizeBindings(null)); c.reset(0, 0, 0);
+  c.button('down', 'KeyD', 17); c.look(0.1, 0, 18);
+  c.button('pulse', 'WheelDown', 27); c.look(0.2, 0, 29);
   const ticks: UserCommand[] = [];
   c.advance(32, 128, input => ticks.push(input));
   assert.deepEqual(ticks.map(t => [t.side, t.yaw, t.jump]), [
@@ -89,7 +89,7 @@ for (const tickRate of [64, 128] as const) {
   test(`${tickRate}t: pending Space/wheel jumps render before the next tick without consuming the command`, () => {
     for (const [kind, token] of [['down', 'Space'], ['pulse', 'WheelDown']] as const) {
       const m = new Movement(); m.tickRate = tickRate;
-      const c = new Commands(normalizeBindings(null)); c.reset(0, 0);
+      const c = new Commands(normalizeBindings(null)); c.reset(0, 0, 0);
       c.button(kind, token, 1);
       c.advance(4, tickRate, input => m.step(input));
       assert.equal(m.jump, null);
@@ -108,8 +108,8 @@ for (const tickRate of [64, 128] as const) {
 }
 
 test('Prediction uses pending axes/yaw but never future events or duplicate jump callbacks', () => {
-  const c = new Commands(normalizeBindings(null)); c.reset(0, 0);
-  c.button('down', 'KeyD', 2); c.look(0.2, 3); c.button('pulse', 'WheelDown', 20);
+  const c = new Commands(normalizeBindings(null)); c.reset(0, 0, 0);
+  c.button('down', 'KeyD', 2); c.look(0.2, 0, 3); c.button('pulse', 'WheelDown', 20);
   const preview = c.preview(4);
   assert.equal(preview.side, 0.5); assert.equal(preview.yaw, 0.2); assert.equal(preview.jump, false);
   const m = new Movement(); m.position.z = 1; m.grounded = false; m.velocity.z = -100;
@@ -123,7 +123,7 @@ test('Prediction uses pending axes/yaw but never future events or duplicate jump
 });
 
 test('Current callback time accepts delivered input that the older rAF timestamp would defer', () => {
-  const c = new Commands(normalizeBindings(null)); c.reset(0, 0);
+  const c = new Commands(normalizeBindings(null)); c.reset(0, 0, 0);
   c.button('pulse', 'WheelDown', 14);
   const commands: UserCommand[] = [];
   // A callback stamped 10 ms actually runs at 17 ms, after the input arrived.
@@ -138,7 +138,7 @@ function replay(tickRate: 64 | 128, frameDurations: number[]) {
   const m = new Movement(); m.tickRate = tickRate;
   m.boxes = [{ id: 'floor', min: { x: -2000, y: -2000, z: -100 }, max: { x: 2000, y: 2000, z: 0 } }];
   m.reset();
-  const c = new Commands(normalizeBindings(null)); c.reset(0, 0);
+  const c = new Commands(normalizeBindings(null)); c.reset(0, 0, 0);
   const events: { at: number; run: () => void }[] = [];
   const button = (at: number, kind: 'down' | 'up' | 'pulse', key: string) => events.push({ at, run: () => c.button(kind, key, at) });
   button(0, 'down', 'KeyW'); button(1000, 'up', 'KeyW'); button(1000, 'pulse', 'WheelDown');
@@ -148,7 +148,7 @@ function replay(tickRate: 64 | 128, frameDurations: number[]) {
     for (let sample = 0; sample < 25; sample++) {
       const at = start + sample * 5;
       const yaw = (strafe % 2 ? -1 + sample / 12 : 1 - sample / 12) * 0.18;
-      events.push({ at, run: () => c.look(yaw, at) });
+      events.push({ at, run: () => c.look(yaw, 0, at) });
     }
   }
   button(1660, 'down', 'ControlLeft');
@@ -180,7 +180,7 @@ for (const tickRate of [64, 128] as const) {
 }
 
 test('Pause/respawn flush pending impulses and prevent catch-up after a reset inside a tick', () => {
-  const c = new Commands(normalizeBindings(null)); c.reset(0, 0);
+  const c = new Commands(normalizeBindings(null)); c.reset(0, 0, 0);
   c.button('pulse', 'WheelDown', 1); c.button('down', 'KeyW', 2);
   c.live.clear(); c.reset(100, 1);
   const inputs: UserCommand[] = [];
@@ -191,7 +191,7 @@ test('Pause/respawn flush pending impulses and prevent catch-up after a reset in
 });
 
 test('Long suspensions discard stale jump taps but keep held movement', () => {
-  const c = new Commands(normalizeBindings(null)); c.reset(0, 0);
+  const c = new Commands(normalizeBindings(null)); c.reset(0, 0, 0);
   c.button('down', 'KeyW', 10); c.button('pulse', 'WheelDown', 20);
   c.advance(1000, 128, () => assert.fail('suspension must not replay physics'));
   c.advance(1008, 128, input => { assert.equal(input.jump, false); assert.equal(input.forward, 1); });
