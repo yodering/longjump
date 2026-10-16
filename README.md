@@ -136,3 +136,7 @@ Checkpoint saves, returns and resets use the CS:GO `buttons/blip1.wav` sample; r
 
 Settings contains a KZ-sound toggle, volume control and sample buttons. Samples deliberately play even when gameplay sound is muted. All seven files load locally and decode through Web Audio after a user gesture. [research/audio/README.md](research/audio/README.md) contains pinned sources, hashes, the source-pack license and the exact config references.
 
+
+## License
+
+The project's own code is under the [MIT License](LICENSE). Bundled maps, models, textures and sounds are third-party assets that the MIT License does not cover; [NOTICE.md](NOTICE.md) lists them with their owners and the takedown contact. This project is not affiliated with Valve.
