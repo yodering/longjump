@@ -15,6 +15,7 @@ const bool = (value: unknown): value is boolean => typeof value === 'boolean';
 const vec = (value: unknown): value is Vec => !!value && typeof value === 'object'
   && finite((value as Vec).x) && finite((value as Vec).y) && finite((value as Vec).z);
 const axis = (value: unknown) => finite(value) && Math.abs(value) <= 1 && Number.isInteger(value * 4);
+const copy = (v: Vec): Vec => ({ x: v.x, y: v.y, z: v.z });
 const between = (value: unknown, min: number, max: number) => finite(value) && value >= min && value <= max;
 
 /** Keeps only the fields physics reads, so recordings stay small and well-typed. */
@@ -44,8 +45,12 @@ export function parseReplay(value: unknown): Replay {
     || ![i.jump, i.duck, i.walk].every(bool) || (i.pitch !== undefined && !between(i.pitch, -Math.PI / 2, Math.PI / 2)) || (i.overlap !== undefined && !bool(i.overlap)) || (i.jumpPressed !== undefined && !bool(i.jumpPressed)))
     throw new Error('Invalid replay input.');
   return { version: 1, tickRate: r.tickRate, mapId: r.mapId, mapContentVersion: r.mapContentVersion, physicsVersion: r.physicsVersion,
-    state: { ...s, position: { ...s.position }, velocity: { ...s.velocity }, crouchSpot: { x: s.crouchSpot.x, y: s.crouchSpot.y },
-      ladderNormal: s.ladderNormal ? { ...s.ladderNormal } : null },
+    // Only state fields: restore() assigns everything it gets, so extra keys (tickRate, world, boxes) would override the server's.
+    state: { grounded: s.grounded, ducked: s.ducked, ducking: s.ducking, duckFlag: s.duckFlag, duckAmount: s.duckAmount, duckSpeed: s.duckSpeed,
+      stamina: s.stamina, jumpHeld: s.jumpHeld, fallVelocity: s.fallVelocity, surfaceFriction: s.surfaceFriction, viewOffset: s.viewOffset,
+      viewPunch: s.viewPunch, platform: s.platform, time: s.time, lastDuckTime: s.lastDuckTime, rawDuck: s.rawDuck, walkButton: s.walkButton,
+      duckButton: s.duckButton, position: copy(s.position), velocity: copy(s.velocity), crouchSpot: { x: s.crouchSpot.x, y: s.crouchSpot.y },
+      ladderNormal: s.ladderNormal ? copy(s.ladderNormal) : null },
     inputs: r.inputs.map(recordInput) };
 }
 

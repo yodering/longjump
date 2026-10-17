@@ -106,7 +106,7 @@ export class Movement {
     if (box || !this.world) return box && { id: box.id, z: box.max.z };
     const tr = this.trace(p, { ...p, z: p.z - 2 });
     if (tr.startsolid) return undefined;
-    return tr.ground && tr.fraction < 1 && tr.normal.z >= 0.7 ? tr.ground : this.groundInQuadrants(p, p.z - 2);
+    return tr.fraction < 1 ? (tr.normal.z >= 0.7 ? tr.ground : this.groundInQuadrants(p, p.z - 2)) : undefined;
   }
   overlaps(p: Vec, height: number) { return this.trace(p, p, height).startsolid; }
   // Eye position between the last two ticks, as the client renders the predicted player.
@@ -510,7 +510,8 @@ export class Movement {
     // Moving up rapidly, or up a ladder, is never on ground.
     if (v.z > RULES.nonJumpVelocity || (v.z > 0 && this.ladderNormal)) { this.setGround(undefined); return; }
     const tr = this.trace(p, { ...p, z: point });
-    const ground = tr.ground && tr.fraction < 1 && tr.normal.z >= 0.7 ? tr.ground : this.groundInQuadrants(p, point);
+    // A quarter hull sweeps inside the full one, so quadrants only matter when the full hull hit something steep.
+    const ground = tr.fraction < 1 ? (tr.normal.z >= 0.7 ? tr.ground : this.groundInQuadrants(p, point)) : undefined;
     if (!ground) {
       this.setGround(undefined);
       if (v.z > 0) this.surfaceFriction = 0.25;
