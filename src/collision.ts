@@ -10,6 +10,7 @@ export type WorldHit = { fraction: number; normal: Vec3; startsolid: boolean; al
 // Contents of each box and brush (collision.bin LJC2; LJC1 files are all SOLID). SOLID is MASK_PLAYERSOLID; LADDER is
 // CONTENTS_LADDER, which LadderMove looks for on what its MASK_PLAYERSOLID trace hits.
 export const SOLID = 1, LADDER = 2;
+type Best = WorldHit & { key: number; ladderAt: number };
 
 // Engine DIST_EPSILON (also in physics.ts): traces stop this far short of a surface.
 const EPSILON = 0.03125;
@@ -74,14 +75,14 @@ export class CollisionWorld {
     return [Math.min(this.columns - 1, Math.max(0, Math.floor((x - this.min.x) / CELL))), Math.min(this.rows - 1, Math.max(0, Math.floor((y - this.min.y) / CELL)))];
   }
 
-  /** Sweeps a hull with feet at `start` (x/y half-width `half`, `height` tall) to `end`, against primitives in `mask`. */
-  trace(start: Vec3, end: Vec3, half: number, height: number, mask = SOLID): WorldHit | null {
+  /** Sweeps a hull with feet at `start` (x/y half-width `half`, `height` tall) to `end`. */
+  trace(start: Vec3, end: Vec3, half: number, height: number): WorldHit | null {
     const lo = [Math.min(start.x, end.x) - half - 1, Math.min(start.y, end.y) - half - 1, Math.min(start.z, end.z) - 1];
     const hi = [Math.max(start.x, end.x) + half + 1, Math.max(start.y, end.y) + half + 1, Math.max(start.z, end.z) + height + 1];
     if (hi[0] < this.min.x || lo[0] > this.max.x || hi[1] < this.min.y || lo[1] > this.max.y || hi[2] < this.min.z || lo[2] > this.max.z) return null;
     const [x0, y0] = this.cell(lo[0], lo[1]), [x1, y1] = this.cell(hi[0], hi[1]);
     if (++this.tick === 0xffffffff) { this.stamp.fill(0); this.tick = 1; }
-    const best: WorldHit & { key: number } = { fraction: 1, normal: { x: 0, y: 0, z: 0 }, startsolid: false, allsolid: false, id: '', ladder: false, key: Infinity };
+    const best: Best = { fraction: 1, normal: { x: 0, y: 0, z: 0 }, startsolid: false, allsolid: false, id: '', ladder: false, key: Infinity, ladderAt: Infinity };
     const offsets = [0, this.boxes.length / 6, this.boxes.length / 6 + this.brushes.length / 2];
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
       const c = y * this.columns + x;
@@ -89,7 +90,6 @@ export class CollisionWorld {
         const item = this.cellItems[k], type = item >>> 28, index = item & 0xfffffff, key = offsets[type] + index;
         if (this.stamp[key] === this.tick) continue;
         this.stamp[key] = this.tick;
-        if (type !== TRIANGLE && !(this.contents[key] & mask)) continue;
         const bounds = type === BOX ? this.boxes : type === BRUSH ? this.brushBounds : this.triangleBounds;
         const o = index * 6;
         if (bounds[o] > hi[0] || bounds[o + 3] < lo[0] || bounds[o + 1] > hi[1] || bounds[o + 4] < lo[1] || bounds[o + 2] > hi[2] || bounds[o + 5] < lo[2]) continue;
@@ -99,12 +99,13 @@ export class CollisionWorld {
       }
     }
     if (best.key === Infinity && !best.startsolid) return null;
-    const ladder = best.key < this.contents.length && !!(this.contents[best.key] & LADDER);
+    // Maps put ladder faces flush with clip brushes; the engine climbs them, so a ladder tied with the nearest hit counts.
+    const ladder = best.fraction < 1 && (best.ladderAt - best.fraction) * Math.hypot(end.x - start.x, end.y - start.y, end.z - start.z) <= 0.01;
     return { fraction: best.fraction, normal: best.normal, startsolid: best.startsolid, allsolid: best.allsolid, id: best.id, ladder };
   }
 
   // The same Minkowski slab test physics.ts uses for map boxes (IntersectRayWithBoxBrush's contact plane choice).
-  private clipBox(index: number, start: Vec3, end: Vec3, half: number, height: number, key: number, best: WorldHit & { key: number }) {
+  private clipBox(index: number, start: Vec3, end: Vec3, half: number, height: number, key: number, best: Best) {
     const b = this.boxes, o = index * 6;
     const lo = [b[o] - half, b[o + 1] - half, b[o + 2] - height], hi = [b[o + 3] + half, b[o + 4] + half, b[o + 5]];
     const s = [start.x, start.y, start.z], d = [end.x - start.x, end.y - start.y, end.z - start.z];
@@ -132,7 +133,7 @@ export class CollisionWorld {
 
   // CM_ClipBoxToBrush with the hull's extents folded into each plane distance.
   private clipPlanes(planes: Float32Array | Float64Array, first: number, count: number, start: Vec3, end: Vec3, half: number, height: number,
-    key: number, best: WorldHit & { key: number }, prefix: string) {
+    key: number, best: Best, prefix: string) {
     const h = height / 2, sz = start.z + h, ez = end.z + h;
     let enter = -99999, leave = 1, startout = false, getout = false, clip = -1;
     for (let p = first; p < first + count * 4; p += 4) {
@@ -152,8 +153,9 @@ export class CollisionWorld {
       this.take(best, Math.max(0, enter), { x: planes[clip], y: planes[clip + 1], z: planes[clip + 2] }, key, id, false);
   }
 
-  private take(best: WorldHit & { key: number }, fraction: number, normal: Vec3, key: number, id: string, allsolid: boolean) {
+  private take(best: Best, fraction: number, normal: Vec3, key: number, id: string, allsolid: boolean) {
     if (allsolid) best.allsolid = true;
+    if (key < this.contents.length && this.contents[key] & LADDER) best.ladderAt = Math.min(best.ladderAt, fraction);
     if (fraction < best.fraction || (fraction === best.fraction && key < best.key)) {
       if (fraction >= 1) return;
       best.fraction = fraction; best.normal = normal; best.key = key; best.id = id;

@@ -101,3 +101,19 @@ test('Replays carry pitch and reject a takeoff on a ladder', () => {
   assert.throws(() => verifyReplay(replay, [], m.world), /solid ground/);
   assert.throws(() => parseReplay({ ...replay, inputs: [{ ...idle, pitch: 4 }] }), /input/);
 });
+
+test('Replay states keep only movement fields, so a post cannot override server settings', () => {
+  const m = setup(); const state = { ...m.snapshot(), tickRate: 64, world: null, boxes: [], autoBhop: true };
+  const replay = parseReplay({ version: 1, tickRate: 128, mapId: 'test', mapContentVersion: '', physicsVersion: '', state, inputs: [idle] });
+  for (const key of ['tickRate', 'world', 'boxes', 'autoBhop']) assert.ok(!(key in replay.state), key);
+  const restored = new Movement(); restored.tickRate = 128; restored.restore(replay.state);
+  assert.equal(restored.tickRate, 128);
+});
+
+test('A ladder flush with a clip brush is still climbable', () => {
+  // Clip first, so the nearest-then-lowest rule picks it over the ladder at the same distance (as on de_nuke).
+  const clip = { box: box('clip', [-16, 100, 0], [16, 101, 300]), contents: SOLID };
+  const m = new Movement(); m.boxes = []; m.world = world([clip, ...scene]); m.reset({ x: 0, y: 40, z: DIST_EPSILON });
+  mount(m);
+  assert.deepEqual(m.ladderNormal, { x: 0, y: -1, z: 0 });
+});
