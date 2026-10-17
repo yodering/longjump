@@ -224,13 +224,14 @@ def convert(source, output, vpk_path):
                 for t in tris: collision_tris.append([c for k in t for c in grid[k]])
             if not drawn: continue
             g = groups[mat]; offset = len(g['positions']) // 3
-            for (b, alpha), p in zip(base, grid):
+            for k, ((b, alpha), p) in enumerate(zip(base, grid)):
                 g['positions'] += [round(float(c), 3) for c in p]
                 u = (sum(b[a] * info[a] for a in range(3)) + info[3]) / max(1, materials[mat]['width'])
                 v = -(sum(b[a] * info[a + 4] for a in range(3)) + info[7]) / max(1, materials[mat]['height'])
                 g['uvs'] += [round(u, 5), round(v, 5)]
-                g['lm'] += [fi if lit else -1, sum(b[a] * info[8 + a] for a in range(3)) + info[11] - lmMinS,
-                            sum(b[a] * info[12 + a] for a in range(3)) + info[15] - lmMinT]
+                # Displacement lightmaps span the grid corner to corner from the start corner (CCoreDispSurface::
+                # CalcLuxelCoords, CCoreDispInfo::CalcDispSurfCoords), not the base face's planar projection.
+                g['lm'] += [fi if lit else -1, lmW * (k % size) / (size - 1), lmH * (k // size) / (size - 1)]
                 g['blend'].append(round(alpha, 4))
             g['indices'] += [offset + k for t in tris for k in t]
         else:
