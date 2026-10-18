@@ -1,4 +1,4 @@
-import { maps } from './maps';
+import { maps, isRetiredMap } from './maps';
 import { HistoryArchive, type HistoryQuery, type SavedEntry } from './history-archive';
 import { parseBackup, MAX_BACKUP_BYTES, type Backup, type SavedPosition } from './backup';
 import { readBests, type Entry } from './history';
@@ -97,7 +97,7 @@ export class HistoryPanel {
     this.element<HTMLButtonElement>('clear-filters').disabled = !active;
     this.storageNote();
   }
-  private mapName(entry: SavedEntry) { return maps.find(map => map.id === entry.mapId)?.name ?? (entry.mapId === 'concrete' ? 'Concrete (retired)' : 'Older map'); }
+  private mapName(entry: SavedEntry) { return maps.find(map => map.id === entry.mapId)?.name ?? (isRetiredMap(entry.mapId) ? `${entry.mapId === 'concrete' ? 'Concrete' : entry.mapId} (retired)` : 'Older map'); }
   private row(entry: SavedEntry) {
     const number = (value: number, digits = 1) => Number.isFinite(value) ? value.toFixed(digits) : '—';
     return `<details class="history-attempt"><summary><span><b class="${entry.valid ? '' : 'failed'}">${entry.distance.toFixed(2)}</b>${entry.valid ? '' : '<small>Miss / invalid</small>'}</span><span>${entry.strafes.length} strafes · ${entry.sync.toFixed(0)}% sync</span></summary>

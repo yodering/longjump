@@ -1,5 +1,7 @@
 # Whole maps: de_mirage and de_nuke
 
+**Removed from the game on 18 October 2026.** The importer and engine support remain; the steps below rebuild `public/maps/de_mirage` and `public/maps/de_nuke`, which then also need entries in `src/maps.ts`, out of `retiredMaps`.
+
 Valve's competitive maps are imported whole and walkable, so long jumps can be practised anywhere flat. They have no fixed lanes: a jump counts when it lands at its takeoff height, exactly as on the classic maps, and history records no gap.
 
 ## Source

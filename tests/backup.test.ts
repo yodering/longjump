@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { IDBFactory } from 'fake-indexeddb';
 import { HistoryArchive, type SavedEntry } from '../src/history-archive';
-import { parseBackup, checkpointForMap, fingerprint, type Backup } from '../src/backup';
+import { parseBackup, checkpointForMap, fingerprint, readCheckpoints, type Backup } from '../src/backup';
 import { defaults } from '../src/settings';
 import { Movement } from '../src/physics';
 
@@ -111,4 +111,14 @@ test('Import refuses unavailable storage instead of claiming a durable save', as
   const archive = new HistoryArchive([], undefined);
   await assert.rejects(archive.merge([entry()], []), /unavailable/);
   assert.equal((await archive.export()).length, 0);
+});
+
+test('Removed de_mirage / de_nuke attempts stay portable, and their saved positions drop without losing the others', async () => {
+  const retired = { ...entry(), mapId: 'de_nuke' as const };
+  const parsed = await parseBackup(JSON.stringify({ ...backup(), attempts: [retired], bests: [retired] }));
+  assert.equal(parsed.attempts[0].mapId, 'de_nuke'); assert.equal(parsed.bests.length, 0);
+  const position = (mapId: string) => ({ mapId, mapContentVersion: 'a'.repeat(64), position: { x: 0, y: 0, z: 0 }, yaw: 0, pitch: 0 });
+  // As main.ts reads them on load: a stored de_mirage position must not discard the rest.
+  const kept = readCheckpoints(['de_mirage', 'kz_baxter', 'de_nuke', 'longjump_source_go'].map(position));
+  assert.deepEqual(kept.map(c => c.mapId), ['kz_baxter', 'longjump_source_go']);
 });

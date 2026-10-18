@@ -1,6 +1,6 @@
 # longjump
 
-A desktop browser long-jump practice room inspired by vanilla CS:GO KZ. Three imported Workshop long-jump maps (kz_baxter's LJ room, the default, plus two from 2014) and Valve's de_mirage and de_nuke, whole and walkable, with mouse-look and manual strafing. Built with TypeScript, Three.js and Vite.
+A desktop browser long-jump practice room inspired by vanilla CS:GO KZ. Three imported Workshop long-jump maps (kz_baxter's LJ room, the default, plus two from 2014), with mouse-look and manual strafing. Built with TypeScript, Three.js and Vite.
 
 ## Run
 
@@ -78,7 +78,7 @@ Keyboard and mouse events are timestamped and consumed by the next physics comma
 
 Remaining differences from the game:
 
-- On the classic maps, collision runs against the maps' axis-aligned brush boxes, not BSP brushes, so there are no slopes or ramps. The whole maps also collide with angled brushes, displacements and static prop hulls; see [Whole maps](#whole-maps). On the whole maps, `TryTouchGroundInQuadrants` keeps the floor under a hull that also touches a steep face; the classic maps' boxes never need it. The courtyard and pit floors remain walkable after misses; only falling outside the imported geometry resets the player. Water and surface properties (all friction 1) are outside this prototype. Ladders exist only on the whole maps.
+- On the classic maps, collision runs against the maps' axis-aligned brush boxes, not BSP brushes, so there are no slopes or ramps. The engine also supports whole imported maps (angled brushes, displacements, prop hulls, ladders and `TryTouchGroundInQuadrants`); see [Whole maps](#whole-maps). The courtyard and pit floors remain walkable after misses; only falling outside the imported geometry resets the player. Water and surface properties (all friction 1) are outside this prototype.
 - Math is double precision; Source uses 32-bit floats, so positions differ in the far decimals.
 - Distance is horizontal origin displacement plus 32 units, with GOKZ's interpolated touchdown origin. Edge is the distance from the takeoff block edge to the back of the hull. Misses are measured at the takeoff elevation. Touching any non-floor surface invalidates a jump, and jumps below 200 units do not count as bests. Sync is the share of airborne ticks with horizontal speed gain. These follow KZ conventions but are not certified GOKZ scores.
 - Mouse sensitivity defaults to Source's 0.022° per browser pixel, with imported `m_yaw` / `m_pitch` support; pointer lock requests unaccelerated input, falling back when the browser reports it unsupported. Browser event delivery and DPI can still differ from CS:GO raw input. Pitch is limited to ±89°. FOV follows Source's horizontal-at-4:3 convention, as does the viewmodel's. Crosshair sizes are CSS pixels and approximate Source's static crosshair rather than reproducing its resolution-dependent rasterization.
@@ -115,12 +115,7 @@ See [research/maps/README.md](research/maps/README.md) for research, provenance 
 
 ## Whole maps
 
-| Map | Collision | Static props | Download |
-| --- | --- | --- | --- |
-| de_mirage | 4,193 boxes, 3,765 angled brushes, 93,242 displacement and prop-hull triangles | 1,697 of 241 models | 28 MB |
-| de_nuke | 5,154 boxes, 1,527 angled brushes, 157,094 displacement and prop-hull triangles | 6,690 of 1,392 models | 41 MB |
-
-Valve's competitive maps come from the final CS:GO content depot and are imported whole, with no fixed lanes: a jump counts anywhere it lands at its takeoff height. Angled brushes are clipped with their bevel planes as `CM_ClipBoxToBrush` does, and displacements and static props (their PHY hulls) collide per triangle. The leaderboard server loads the same collision and reruns jumps against it. Surfaces use the maps' HDR lightmaps in the classic maps' LDR combine, displacements blend their two textures, and props use VRAD's baked per-vertex lighting. Ladders are climbable: `CONTENTS_LADDER` brushes are flagged in the collision, and `LadderMove` follows the public Source SDK 2013 code with its CS dampening (look up or down the ladder to climb faster, jump to push 270 u/s off it). The climb speed uses CS:GO's `sv_ladder_scale_speed` (0.78) and still needs checking against a recorded trace. Jumps that touch or leave a ladder never count. Dynamic and physics props stand where they spawn, solid as the engine spawns them, and never move. Rotating doors, overlays, the 3D skybox and water are not imported. See [research/whole-maps](research/whole-maps/README.md) for provenance, reproduction and conversion details.
+de_mirage and de_nuke were playable whole for a while and were removed on 18 October 2026: their visual artifacts were more work than they were worth. Attempts on them stay in history and backups as retired maps; their saved positions are dropped. The engine support remains in `src/collision.ts`, `src/physics.ts` and `src/world.ts`, and [research/whole-maps](research/whole-maps/README.md) documents the importer that rebuilds them from Valve's files.
 
 ## Viewmodel
 

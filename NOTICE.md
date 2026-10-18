@@ -8,7 +8,6 @@ This project is a free, non-commercial fan project. It is not affiliated with, e
 
 | Path | Contents | Owner / license | Provenance |
 | --- | --- | --- | --- |
-| `public/maps/de_mirage`, `public/maps/de_nuke` | Converted map geometry, textures, lighting, props and skies | Valve; no license granted | [research/whole-maps](research/whole-maps/README.md) |
 | `public/maps/longjump_source_go`, `kz_longjumps_go`, `kz_baxter` | Converted Workshop map geometry, textures and lighting, plus stock CS:GO materials | The map authors credited in the README, and Valve; no license granted | [research/maps](research/maps/README.md) |
 | `public/players` | CT and T player models and animations | Valve; no license granted | [research/players](research/players/README.md) |
 | `public/viewmodels` | Default knife and arm viewmodels | Valve; no license granted | [research/viewmodels](research/viewmodels/README.md) |

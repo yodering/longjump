@@ -1,6 +1,6 @@
 import { readBests, type Entry } from './history';
 import type { SavedEntry } from './history-archive';
-import { maps, type MapId } from './maps';
+import { maps, retiredMaps, isRetiredMap, type MapId } from './maps';
 import { normalizeSettings, type Settings } from './settings';
 import type { Position } from './practice';
 import { RULES, type Movement } from './physics';
@@ -42,7 +42,7 @@ export function backupEntry(value: unknown): Entry {
   const e = object(value);
   if (e.tickRate !== 64 && e.tickRate !== 128) throw new Error('Unsupported tick rate in backup.');
   if (typeof e.valid !== 'boolean' || e.distance === undefined || e.sync === undefined) throw new Error('Incomplete jump in backup.');
-  if (e.mapId !== undefined && e.mapId !== 'concrete' && !maps.some(m => m.id === e.mapId)) throw new Error('Unknown map in backup.');
+  if (e.mapId !== undefined && !isRetiredMap(e.mapId) && !maps.some(m => m.id === e.mapId)) throw new Error('Unknown map in backup.');
   const entry: Entry = {
     distance: number(e.distance, 0, 0, 1e6), sync: number(e.sync, 0, 0, 100), tickRate: e.tickRate,
     mapId: e.mapId as Entry['mapId'], gap: number(e.gap, 0, 0, 1e6), at: number(e.at, 0, 0, 8.64e15),
@@ -90,8 +90,7 @@ export async function parseBackup(contents: string): Promise<Backup> {
     preferences: raw.preferences === undefined ? undefined : normalizeSettings(object(raw.preferences)) };
 }
 export function readCheckpoints(value: unknown): SavedPosition[] {
-  const checkpoints = array(value ?? [], maps.length).map(value => {
-    const c = object(value);
+  const checkpoints = array(value ?? [], maps.length + retiredMaps.length).map(object).filter(c => !isRetiredMap(c.mapId)).map(c => {
     if (!maps.some(map => map.id === c.mapId) || typeof c.mapContentVersion !== 'string' || !/^[0-9a-f]{64}$/.test(c.mapContentVersion))
       throw new Error('Invalid saved position in backup.');
     return { mapId: c.mapId as MapId, mapContentVersion: c.mapContentVersion, position: vector(c.position),

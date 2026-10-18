@@ -5,10 +5,12 @@ export const maps = [
   { id: 'kz_baxter', name: 'kz_baxter', detail: 'LJ room · 210–310 units', credits: 'Samuel · LJ room by xq · textures by TopHATTwaffle & Saspatoon', workshop: '1366794864' },
   { id: 'longjump_source_go', name: 'longjump_source_go', detail: 'Courtyard · 225–260 units', credits: 'AZiRES · CS:GO port by badgec / kernel', workshop: '249758765' },
   { id: 'kz_longjumps_go', name: 'kz_longjumps_go', detail: 'Long-jump wing · 240–249 units', credits: 'Draw → THEBUGUSER → badgec / kernel', workshop: '249444895' },
-  { id: 'de_mirage', name: 'de_mirage', detail: 'Whole map · jump anywhere flat', credits: 'Valve · Counter-Strike: Global Offensive', workshop: '' },
-  { id: 'de_nuke', name: 'de_nuke', detail: 'Whole map · jump anywhere flat', credits: 'Valve · Counter-Strike: Global Offensive', workshop: '' },
 ] as const;
 export type MapId = typeof maps[number]['id'];
+// Removed maps whose attempts stay in history and backups; their saved positions are dropped.
+export const retiredMaps = ['concrete', 'de_mirage', 'de_nuke'] as const;
+export type RetiredMapId = typeof retiredMaps[number];
+export const isRetiredMap = (id: unknown): id is RetiredMapId => (retiredMaps as readonly unknown[]).includes(id);
 export type Lane = { gap: number; startId: string; endId: string; spawn: Vec; yaw: number };
 export type ImportedMap = {
   boxes: Box[]; lanes: Lane[]; preview: { position: Vec; target: Vec }; resetFloor: number;
