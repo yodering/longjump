@@ -1,6 +1,6 @@
 # Leaderboard and room server
 
-One Bun process on Railway with SQLite on a persistent volume. It serves the leaderboard API and private multiplayer rooms. Cloudflare keeps serving the game. The Worker in [`worker/proxy.ts`](../worker/proxy.ts) forwards `/api/*` here, so the game calls a single origin.
+One Bun process on Railway with SQLite on a persistent volume. It serves the leaderboard API and multiplayer rooms. Cloudflare keeps serving the game. The Worker in [`worker/proxy.ts`](../worker/proxy.ts) forwards `/api/*` here, so the game calls a single origin.
 
 ```text
 browser ──> longjump.ing (Cloudflare) ──static──> dist/
@@ -19,6 +19,8 @@ Each name keeps one best per tick rate. The board is the top 100 across maps, op
 ## Rooms
 
 Practice → **Create room** gives an invite link (`longjump.ing/#room=abcd2345`). Opening it joins the room after choosing a name. Leaderboard and rooms use the same name. Rooms hold up to 8 players and share one map; when anyone changes maps, everyone follows. Empty rooms end after 10 minutes. Reloading rejoins from the link.
+
+Practice → **Join public room** joins the busiest public room on the current map that has space, or opens a new one. Public rooms keep their map: changing maps moves you to that map's public room. They relay no jump announcements, since strangers' client-reported jumps would be easy to fake. On load, a named player joins the current map's public room automatically if anyone is in it, until they leave a public room; pressing Join turns that back on. The menu shows how many people are playing on the map.
 
 Rooms run over a WebSocket at `/api/rooms` through the same Cloudflare proxy. The first message carries the name key, never the URL. The server assigns names, checks the physics version, and relays two things:
 
@@ -50,7 +52,8 @@ Vite proxies `/api/*` to port 8787 (or `LONGJUMP_API`). `ALLOW_DIRECT=1` lets th
 | `GET /api/players/me` | Bearer key; name, banned flag and posted bests |
 | `POST /api/players/me` | Bearer key, `name`; renames |
 | `POST /api/jumps` | Bearer key, `replay`; returns verified distance, rank and whether it improved |
-| `GET /api/rooms` (WebSocket) | `hello` with key and physics version, then `pose`, `jump`, `map` messages |
+| `GET /api/rooms` (WebSocket) | `hello` with key, physics version and `room`, `create` + `map`, or `public` + `map`; then `pose`, `jump`, `map` messages |
+| `GET /api/rooms/public` | Players in public rooms per map: `{ maps: { [mapId]: count } }` |
 | `/api/admin/*` | `ADMIN_TOKEN` bearer: list entries, delete entries, rename and ban players |
 
 Names use 3–16 letters, numbers or underscores. Uniqueness ignores case, underscores and look-alikes, so `Y0der_ing` collides with `yodering`. Reserved and offensive names are refused. Banned names vanish from the board and cannot post.

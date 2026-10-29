@@ -22,14 +22,16 @@ export const ANNOUNCE_DISTANCE = 240;
 const IDLE_POSE_MS = 1000;
 
 /**
- * One WebSocket to a private room. Poses go out at 20 Hz while moving and once a
+ * One WebSocket to a private or public room. Poses go out at 20 Hz while moving and once a
  * second while idle; nothing here waits on the network during a physics tick.
- * Dropped connections rejoin the same room with backoff.
+ * Dropped connections rejoin the same room with backoff; public rooms rematch by map.
  */
 export class RoomClient {
   code: string | null = null;
   you: string | null = null;
   mapId: string | null = null;
+  /** The map of the public room this client is in or joining. */
+  publicMap: string | null = null;
   status: RoomStatus = 'idle';
   players = new Map<string, string>();
   private ws: WebSocket | null = null;
@@ -45,11 +47,12 @@ export class RoomClient {
   /** Creates a room on the given map. */
   start(mapId: string) { this.leave(); this.create = mapId; this.connect(); }
   join(code: string) { this.leave(); this.code = code.toLowerCase(); this.connect(); }
+  joinPublic(mapId: string) { this.leave(); this.publicMap = mapId; this.connect(); }
   leave() {
     clearTimeout(this.retryTimer);
     const ws = this.ws; this.ws = null;
     if (ws) { ws.onclose = null; ws.close(1000, 'left'); }
-    this.code = this.you = this.mapId = this.create = null; this.players.clear(); this.status = 'idle'; this.retries = 0;
+    this.code = this.you = this.mapId = this.create = this.publicMap = null; this.players.clear(); this.status = 'idle'; this.retries = 0;
     this.events.changed?.();
   }
   private connect() {
@@ -60,12 +63,12 @@ export class RoomClient {
     this.ws = ws;
     // The key goes in the first message, not the URL, so it stays out of logs.
     ws.onopen = () => ws.send(JSON.stringify({ t: 'hello', key: player.key, physics: this.physics,
-      ...(this.code ? { room: this.code } : { create: true, map: this.create }) }));
+      ...(this.publicMap ? { public: true, map: this.publicMap } : this.code ? { room: this.code } : { create: true, map: this.create }) }));
     ws.onmessage = event => { try { this.receive(JSON.parse(String(event.data))); } catch { /* Ignore malformed frames. */ } };
     ws.onclose = () => {
       if (this.ws !== ws) return;
       this.ws = null;
-      if (!this.code && !this.create) return;
+      if (!this.code && !this.create && !this.publicMap) return;
       this.status = 'retrying'; this.events.changed?.();
       const delay = Math.min(15_000, 1000 * 2 ** this.retries++);
       this.retryTimer = window.setTimeout(() => this.connect(), delay);
@@ -73,7 +76,7 @@ export class RoomClient {
   }
   private receive(message: Record<string, any>) {
     if (message.t === 'welcome') {
-      this.code = message.room; this.create = null; this.you = message.you; this.retries = 0; this.status = 'open';
+      this.code = message.room; this.create = null; this.publicMap = message.public ? message.map : null; this.you = message.you; this.retries = 0; this.status = 'open';
       this.players = new Map((message.players as { id: string; name: string }[]).map(p => [p.id, p.name]));
       const mapChanged = this.mapId !== message.map; this.mapId = message.map;
       this.lastPose = ''; this.resetPending = true;
@@ -104,10 +107,14 @@ export class RoomClient {
     this.send({ t: 'pose', ...pose, ...(this.resetPending ? { r: true } : {}) }); this.resetPending = false;
   }
   jump(result: Result, tick: 64 | 128, auto: boolean) {
-    if (!result.valid || result.distance < ANNOUNCE_DISTANCE) return;
+    if (this.publicMap || !result.valid || result.distance < ANNOUNCE_DISTANCE) return;
     this.send({ t: 'jump', tick, auto, distance: result.distance, sync: result.sync, pre: result.preSpeed, max: result.maxSpeed, height: result.height,
       width: result.width, strafes: result.strafes.length, ticks: result.ticks, overlap: result.overlap, deadAir: result.deadAir, edge: result.edge });
   }
-  changeMap(mapId: string) { if (this.connected && mapId !== this.mapId) { this.mapId = mapId; this.send({ t: 'map', map: mapId }); } }
+  /** Private rooms follow the map change; public rooms keep their map, so this moves to that map's public room. */
+  changeMap(mapId: string) {
+    if (this.publicMap) { if (mapId !== this.publicMap) this.joinPublic(mapId); }
+    else if (this.connected && mapId !== this.mapId) { this.mapId = mapId; this.send({ t: 'map', map: mapId }); }
+  }
   inviteLink() { return this.code ? `${location.origin}${location.pathname}#room=${this.code}` : ''; }
 }

@@ -2,9 +2,10 @@ import type { ServerWebSocket } from 'bun';
 import { createHash, randomBytes } from 'node:crypto';
 import type { Database } from 'bun:sqlite';
 
-// Private practice rooms. Movement stays on each client; the server only relays
+// Practice rooms. Movement stays on each client; the server only relays
 // poses and jump announcements, so a slow room never delays anyone's inputs.
 // Announcements are client-reported; only replay-verified jumps reach the leaderboard.
+// Public rooms are matched by map, keep their map and relay no announcements, since strangers can't vouch for each other.
 export const ROOM_SIZE = 8;
 export const SNAPSHOT_MS = 50;
 // Matches the client: shorter jumps are not announced to the room.
@@ -17,7 +18,7 @@ const POSITION_LIMIT = 65_536, SPEED_LIMIT = 4_000;
 export type RoomSocket = ServerWebSocket<{ address: string; member?: Member }>;
 type Pose = { p: [number, number, number]; v: [number, number, number]; yaw: number; pitch: number; g: boolean; d: number; r: boolean; m: 'ct' | 't'; s?: true };
 type Member = { id: string; name: string; room: Room; ws: RoomSocket; pose: Pose | null; dirty: boolean; poses: number[]; jumps: number[] };
-type Room = { code: string; mapId: string; members: Map<string, Member>; emptySince: number | null };
+type Room = { code: string; mapId: string; public: boolean; members: Map<string, Member>; emptySince: number | null };
 export type RoomsConfig = { db: Database; physicsVersion: string; mapIds: string[]; now?: () => number };
 
 const finite = (value: unknown, limit: number): value is number => typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= limit;
@@ -54,13 +55,20 @@ export function createRooms(config: RoomsConfig) {
     if (!player) return fail(ws, 'Choose a name before joining a room.');
     if (player.banned) return fail(ws, 'This name can’t join rooms.');
     let room: Room | undefined;
-    if (input.create === true) {
+    if (input.public === true) {
+      if (typeof input.map !== 'string' || !config.mapIds.includes(input.map)) return fail(ws, 'Choose a map before joining.');
+      // A reconnect returns to its own room; otherwise fill the busiest room with space, so players gather.
+      const open = [...rooms.values()].filter(r => r.public && r.mapId === input.map);
+      room = open.find(r => r.members.has(player.id))
+        ?? open.filter(r => r.members.size < ROOM_SIZE).sort((a, b) => b.members.size - a.members.size)[0];
+      if (!room) { room = { code: code(), mapId: input.map, public: true, members: new Map(), emptySince: null }; rooms.set(room.code, room); }
+    } else if (input.create === true) {
       if (typeof input.map !== 'string' || !config.mapIds.includes(input.map)) return fail(ws, 'Choose a map before creating a room.');
       const times = creations.get(ws.data.address) ?? [];
       while (times.length && times[0] <= now() - 3_600_000) times.shift();
       if (times.length >= 10) return fail(ws, 'Too many rooms created. Try again later.');
       times.push(now()); creations.set(ws.data.address, times);
-      room = { code: code(), mapId: input.map, members: new Map(), emptySince: null };
+      room = { code: code(), mapId: input.map, public: false, members: new Map(), emptySince: null };
       rooms.set(room.code, room);
     } else {
       room = typeof input.room === 'string' ? rooms.get(input.room.toLowerCase()) : undefined;
@@ -72,7 +80,7 @@ export function createRooms(config: RoomsConfig) {
     else if (room.members.size >= ROOM_SIZE) return fail(ws, `This room is full (${ROOM_SIZE} players).`);
     const member: Member = { id: player.id, name: player.name, room, ws, pose: null, dirty: false, poses: [], jumps: [] };
     ws.data.member = member; room.members.set(member.id, member); room.emptySince = null;
-    send(ws, { t: 'welcome', room: room.code, you: member.id, map: room.mapId, players: roster(room) });
+    send(ws, { t: 'welcome', room: room.code, you: member.id, map: room.mapId, public: room.public, players: roster(room) });
     if (!previous) broadcast(room, { t: 'join', id: member.id, name: member.name }, member);
   }
 
@@ -90,7 +98,8 @@ export function createRooms(config: RoomsConfig) {
   }
 
   function jump(member: Member, input: Record<string, unknown>) {
-    if (!within(member.jumps, now(), 4)) return;
+    // shortcut: public rooms drop announcements rather than replay-verify them; verify if players miss the feed.
+    if (member.room.public || !within(member.jumps, now(), 4)) return;
     const numbers = ['distance', 'sync', 'pre', 'max', 'height', 'width'] as const, counts = ['strafes', 'ticks', 'overlap', 'deadAir'] as const;
     if (!numbers.every(k => finite(input[k], 10_000)) || !counts.every(k => Number.isInteger(input[k]) && (input[k] as number) >= 0 && (input[k] as number) < 10_000)
       || (input.edge !== null && !finite(input.edge, 1_000)) || (input.tick !== 64 && input.tick !== 128) || typeof input.auto !== 'boolean'
@@ -101,7 +110,7 @@ export function createRooms(config: RoomsConfig) {
   }
 
   function map(member: Member, input: Record<string, unknown>) {
-    if (typeof input.map !== 'string' || !config.mapIds.includes(input.map) || input.map === member.room.mapId) return;
+    if (member.room.public || typeof input.map !== 'string' || !config.mapIds.includes(input.map) || input.map === member.room.mapId) return;
     member.room.mapId = input.map;
     for (const m of member.room.members.values()) m.pose = null;
     broadcast(member.room, { t: 'map', map: input.map, by: member.name });
@@ -131,8 +140,15 @@ export function createRooms(config: RoomsConfig) {
     for (const [address, times] of creations) if (!times.length || times[times.length - 1] < at - 3_600_000) creations.delete(address);
   }
 
+  /** Players in public rooms, per map. */
+  function publicCounts() {
+    const counts: Record<string, number> = {};
+    for (const room of rooms.values()) if (room.public && room.members.size) counts[room.mapId] = (counts[room.mapId] ?? 0) + room.members.size;
+    return counts;
+  }
+
   return {
-    rooms, snapshot,
+    rooms, snapshot, publicCounts,
     open(_ws: RoomSocket) { /* Waits for hello. */ },
     message(ws: RoomSocket, raw: string | Buffer) {
       let input: Record<string, unknown>;

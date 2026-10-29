@@ -202,6 +202,8 @@ roomPanel = new RoomPanel($('room-panel'), identity, room, () => settings.mapId,
   setShowPlayers: show => { settings.showPlayers = show; applyPreferences(); },
   spectating: () => spectating,
   spectate: id => { spectate(id); if (id) void enter(); },
+  autoJoin: () => settings.joinPublic,
+  setAutoJoin: on => { settings.joinPublic = on; writeSettings(); },
 });
 applyPreferences();
 function updateStatsPanel() {
@@ -344,6 +346,7 @@ function setLocked(value: boolean) {
   engagement.setPlaying(value && !document.hidden);
   locked = value; controls.clear(); settingsPanel.cancelCapture(); lastTime = performance.now(); commands.reset(lastTime, yaw, pitch); movement.jumpHeld = false;
   $('menu').hidden = value; $('hud').hidden = !value; layoutHud(); previewHud();
+  if (!value) void roomPanel?.refresh();
   if (value) $<HTMLDetailsElement>('jump-details').open = false;
   document.body.classList.toggle('playing', value);
   $('start').querySelector('span')!.textContent = started ? 'Resume' : 'Play';
