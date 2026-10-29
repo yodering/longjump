@@ -143,6 +143,48 @@ test('Anyone in the room can change its map for everyone', async () => {
   assert.equal((await late.next('welcome')).map, 'other');
 });
 
+test('Public rooms match by map, fill up before splitting and report their counts', async () => {
+  const s = start(), first = await s.connect({ key: await s.claim('Alpha'), public: true });
+  const welcome = await first.next('welcome');
+  assert.equal(welcome.public, true); assert.equal(welcome.map, 'flat');
+  for (let i = 0; i < 7; i++) assert.equal((await (await s.connect({ key: await s.claim(`guest${'abcdefg'[i]}x`), public: true })).next('welcome')).room, welcome.room);
+  const ninth = await (await s.connect({ key: await s.claim('Ninth'), public: true })).next('welcome');
+  assert.notEqual(ninth.room, welcome.room);
+  const elsewhere = await (await s.connect({ key: await s.claim('Other'), public: true, map: 'other' })).next('welcome');
+  assert.notEqual(elsewhere.room, ninth.room);
+  assert.deepEqual(s.app.rooms.publicCounts(), { flat: 9, other: 1 });
+  // Private rooms are never matched into.
+  const host = await s.connect({ key: await s.claim('Host'), create: true }), hosted = await host.next('welcome');
+  assert.equal(hosted.public, false);
+  const late = await (await s.connect({ key: await s.claim('Late'), public: true })).next('welcome');
+  assert.notEqual(late.room, hosted.room);
+});
+
+test('Public rooms keep their map and relay no jump announcements', async () => {
+  const s = start(), a = await s.connect({ key: await s.claim('Alpha'), public: true }); await a.next('welcome');
+  const b = await s.connect({ key: await s.claim('Bravo'), public: true }); await b.next('welcome');
+  b.send({ t: 'map', map: 'other' });
+  b.send({ t: 'jump', distance: 299, sync: 80, pre: 250, max: 270, height: 55, width: 20, strafes: 6, ticks: 98, overlap: 0, deadAir: 1, edge: 3.2, tick: 128, auto: false });
+  b.send(pose(1));
+  await a.next('poses');
+  assert.equal(a.inbox.filter(m => m.t === 'map' || m.t === 'jump').length, 0);
+});
+
+test('A public reconnect returns to its own room even when it is full', async () => {
+  const s = start(), key = await s.claim('Alpha'), first = await s.connect({ key, public: true }), { room } = await first.next('welcome');
+  for (let i = 0; i < 7; i++) await (await s.connect({ key: await s.claim(`guest${'abcdefg'[i]}x`), public: true })).next('welcome');
+  assert.equal((await (await s.connect({ key, public: true })).next('welcome')).room, room);
+});
+
+test('Public room counts are served over HTTP', async () => {
+  const db = openDatabase(':memory:');
+  const app = createApp({ db, physicsVersion: 'test', proxy: { allowDirect: true }, maps: { flat: { boxes: flat, contentVersion: 'test' } } });
+  const server = Bun.serve<{ address: string }>({ port: 0, fetch: app.fetch, websocket: app.websocket });
+  servers.push({ stop() { app.stop(); server.stop(true); } });
+  const response = await fetch(`http://127.0.0.1:${server.port}/api/rooms/public`);
+  assert.deepEqual(await response.json(), { maps: {} });
+});
+
 test('The WebSocket endpoint sits behind the same proxy gate as the API', async () => {
   const app = createApp({ db: openDatabase(':memory:'), physicsVersion: 'test', proxy: { proxySecret: 'p'.repeat(32) }, maps: {} });
   const server = Bun.serve<{ address: string }>({ port: 0, fetch: app.fetch, websocket: app.websocket });

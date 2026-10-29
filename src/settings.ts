@@ -13,7 +13,7 @@ export const speedSizes = { s: 'Small', m: 'Medium', l: 'Large' } as const;
 export type HudSettings = { speed: keyof typeof speedPlacements; takeoff: boolean; decimals: 0 | 1 | 2; size: keyof typeof speedSizes;
   color: string; offset: number; keys: boolean; pb: boolean; hints: boolean; menuHint: boolean };
 export type Settings = { mapId: MapId; volume: number; tickRate: 64 | 128; sensitivity: number; mouseYaw: number; mousePitch: number;
-  invertY: boolean; autoBhop: boolean; nullBind: boolean; jumpStats: boolean; showPlayers: boolean; sound: boolean; trail: boolean; viewmodel: boolean; leftHand: boolean; team: 'ct' | 't';
+  invertY: boolean; autoBhop: boolean; nullBind: boolean; jumpStats: boolean; showPlayers: boolean; joinPublic: boolean; sound: boolean; trail: boolean; viewmodel: boolean; leftHand: boolean; team: 'ct' | 't';
   appearance: 'dark' | 'light'; resolution: Resolution; scaling: 'stretch' | 'fit'; view: ViewSettings; crosshair: CrosshairSettings; hud: HudSettings; bindings: Bindings };
 export const viewPresets: Record<string, ViewSettings> = {
   desktop: { fov: 60, x: 1, y: 1, z: -1, bobLower: 21, bobLat: 0.4, bobVert: 0.25, bobCycle: 0.98 },
@@ -23,7 +23,7 @@ export const viewPresets: Record<string, ViewSettings> = {
 export const viewRanges = { fov: [54, 68, 1], x: [-2, 2.5, 0.1], y: [-2, 2, 0.1], z: [-2, 2, 0.1],
   bobLower: [5, 30, 1], bobLat: [0.1, 2, 0.05], bobVert: [0.1, 2, 0.05], bobCycle: [0.1, 2, 0.01] } as const;
 export const defaults: Settings = { mapId: 'kz_baxter', volume: 0.6, tickRate: 64, sensitivity: 2.4,
-  mouseYaw: 0.022, mousePitch: 0.022, invertY: false, autoBhop: false, nullBind: false, jumpStats: false, showPlayers: true, sound: true, trail: true,
+  mouseYaw: 0.022, mousePitch: 0.022, invertY: false, autoBhop: false, nullBind: false, jumpStats: false, showPlayers: true, joinPublic: true, sound: true, trail: true,
   viewmodel: true, leftHand: false, team: 'ct', appearance: 'dark', resolution: 'native', scaling: 'stretch', view: { ...viewPresets.desktop },
   crosshair: { size: 4, gap: 2, thickness: 1, color: '#eeeeee', alpha: 1, dot: false, outline: true },
   hud: { speed: 'crosshair', takeoff: true, decimals: 2, size: 'm', color: '#ffffff', offset: 72, keys: true, pb: true, hints: true, menuHint: true },
@@ -45,7 +45,7 @@ export function normalizeSettings(value: unknown): Settings {
   settings.volume = bounded(raw.volume, defaults.volume, 0, 1);
   settings.mouseYaw = bounded(raw.mouseYaw, defaults.mouseYaw, 0.001, 0.1);
   settings.mousePitch = bounded(raw.mousePitch, defaults.mousePitch, 0.001, 0.1);
-  for (const name of ['invertY', 'autoBhop', 'nullBind', 'jumpStats', 'showPlayers', 'sound', 'trail', 'viewmodel', 'leftHand'] as const)
+  for (const name of ['invertY', 'autoBhop', 'nullBind', 'jumpStats', 'showPlayers', 'joinPublic', 'sound', 'trail', 'viewmodel', 'leftHand'] as const)
     if (typeof raw[name] === 'boolean') settings[name] = raw[name];
   for (const name of Object.keys(viewRanges) as (keyof ViewSettings)[]) {
     const [min, max] = viewRanges[name]; settings.view[name] = bounded(raw.view?.[name], defaults.view[name], min, max);

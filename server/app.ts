@@ -24,6 +24,7 @@ export function createApp(config: AppConfig) {
         if (server.upgrade(request, { data: { address: allowed.address } })) return undefined;
         return new Response('Expected a WebSocket.', { status: 426 });
       }
+      if (url.pathname === '/api/rooms/public' && request.method === 'GET') return Response.json({ maps: rooms.publicCounts() }, { headers: { 'Cache-Control': 'no-store' } });
       return leaderboard(request, allowed.address);
     },
     websocket: {
