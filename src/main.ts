@@ -60,10 +60,10 @@ app.innerHTML = `
       <section id="practice-tab" class="tab-content">
         <div class="checkpoint-help"><span><kbd data-bind-label="save"></kbd> Save position</span><span><kbd data-bind-label="return"></kbd> Return</span><span><kbd data-bind-label="reset"></kbd> Reset</span></div>
         <div class="profile-row"><span>Vanilla</span><button id="tick-toggle">${settings.tickRate} tick <i data-lucide="arrow-left-right" aria-hidden="true"></i></button></div>
-        <div id="room-panel" class="room-panel"></div>
+        <section id="room-panel" class="settings-group room-panel"></section>
       </section>
       <section id="maps-tab" class="tab-content" hidden>
-        <div class="map-options">${maps.map(m => `<button data-map="${m.id}" aria-pressed="false"><b>${m.name}</b><small>${m.detail}</small></button>`).join('')}</div>
+        <div class="map-options">${maps.map(m => `<button data-map="${m.id}" aria-pressed="false"><b>${m.name}</b><small>${m.detail}</small><small class="map-playing" data-playing="${m.id}" hidden></small></button>`).join('')}</div>
         <div id="map-credit" class="map-credit"></div>
       </section>
       <section id="settings-tab" class="tab-content" hidden></section>
@@ -204,6 +204,11 @@ roomPanel = new RoomPanel($('room-panel'), identity, room, () => settings.mapId,
   spectate: id => { spectate(id); if (id) void enter(); },
   autoJoin: () => settings.joinPublic,
   setAutoJoin: on => { settings.joinPublic = on; writeSettings(); },
+  // Maps with people in their public room say so, so players can find each other.
+  counts: counts => document.querySelectorAll<HTMLElement>('[data-playing]').forEach(el => {
+    const n = counts[el.dataset.playing!] ?? 0;
+    el.hidden = !n; el.innerHTML = n ? `<span class="live-dot" aria-hidden="true"></span>${n} playing` : '';
+  }),
 });
 applyPreferences();
 function updateStatsPanel() {

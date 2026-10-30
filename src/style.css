@@ -284,18 +284,6 @@ body.playing .leaderboard-prompt-hint { display: block; margin: 0; }
 @media(max-width:700px) { .corner-stack { right: var(--space-m); } }
 @media(prefers-reduced-motion:reduce) { .leaderboard-prompt { transition: none; } }
 
-/* Rooms sit under the practice profile and reuse its row and the shared name form. */
-.room-panel { margin-top: var(--space-s); }
-.room-row { flex-wrap: wrap; gap: var(--space-s); }
-.room-row>span { font-variant-numeric: tabular-nums; }
-.room-panel form { margin: var(--space-s) 0 0; }
-.room-panel [data-room=status] { margin: var(--space-s) 0 0; }
-.room-players { display: flex; flex-wrap: wrap; gap: var(--space-xs) var(--space-m); list-style: none; margin: var(--space-s) 0 0; padding: 0; color: var(--neutral-10); font: var(--weight-ui-regular) var(--size-xs)/var(--line-xs) var(--font-ui); letter-spacing: var(--letter-spacing-xs); }
-.room-players:empty { display: none; }
-.room-players small { color: var(--neutral-7); font: inherit; }
-.room-players li { display: flex; align-items: center; gap: var(--space-xs); }
-.room-options { margin-top: var(--space-s); }
-
 /* Settings: a section switcher, then cards of rows with the label on the left and its control on the right. */
 /* The section switcher stays reachable while a long settings page scrolls under it. */
 .settings-nav { position: sticky; top: 0; z-index: 1; display: flex; flex-wrap: wrap; gap: var(--space-xxs); margin: calc(-1 * var(--space-xs)) 0 var(--space-xs); padding-block: var(--space-xs); background: var(--dialog-default-popover-rest-background); }
@@ -342,3 +330,22 @@ input.switch:disabled { background: var(--neutral-3); cursor: not-allowed; }
 .settings-card #binding-list .binding-row:last-child { box-shadow: none; }
 .crosshair-preview { position: relative; height: 64px; margin: 0 0 var(--space-m); background: var(--neutral-1); border-radius: var(--radius-s); box-shadow: var(--border-shadow-s); }
 @media(prefers-reduced-motion:reduce) { .switch, .switch::after { transition: none; } }
+
+/* Rooms sit under the practice profile as a settings card: public and private choices, then the roster once joined. */
+.room-panel { margin-top: var(--space-l); }
+/* Hidden rows stay in the card, so separators follow the visible rows instead of :last-child. */
+.room-card.settings-card>* { box-shadow: none; }
+.room-card.settings-card>:not([hidden]):has(~ :not([hidden])) { box-shadow: inset 0 calc(-1 * var(--border-s)) var(--border-default-color); }
+.room-card .settings-buttons { flex-wrap: nowrap; }
+.room-naming { display: flex; flex-direction: column; gap: var(--space-s); padding: var(--space-s) 0; }
+.room-naming .history-toolbar { margin: 0; }
+.room-card>p.setting-note { margin: 0; padding: var(--space-s) 0; }
+.live-dot { display: inline-block; width: var(--space-xs); height: var(--space-xs); margin-inline-end: var(--space-xs); border-radius: var(--radius-full); background: var(--success); vertical-align: baseline; }
+.room-players { list-style: none; margin: 0; padding: var(--space-xs) 0; }
+.room-player { display: flex; align-items: center; gap: var(--space-xs); min-height: 40px; color: var(--neutral-10); font: var(--weight-ui-regular) var(--size-s)/var(--line-s) var(--font-ui); letter-spacing: var(--letter-spacing-s); }
+.room-player>span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.room-player small { color: var(--neutral-7); font: var(--weight-ui-regular) var(--size-xs)/var(--line-xs) var(--font-ui); letter-spacing: var(--letter-spacing-xs); }
+.room-spectate { margin-inline-start: auto; padding: var(--space-xs); background: var(--color-none); color: var(--neutral-7); border-radius: var(--radius-s); }
+.room-spectate:hover { background: var(--neutral-4-transparent); color: var(--neutral-10); }
+.room-spectate[aria-pressed=true] { background: var(--neutral-4); color: var(--neutral-10); }
+.map-options .map-playing { color: var(--neutral-8); }
